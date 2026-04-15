@@ -114,7 +114,6 @@ template:
       - name: "Energy Import Price Cents"
         unique_id: energy_import_price_cents
         unit_of_measurement: "c/kWh"
-        device_class: monetary
         state_class: measurement
         state: >
           {% set src = states('input_select.energy_amber_live_source') %}
@@ -131,7 +130,6 @@ template:
       - name: "Energy Export Price Cents"
         unique_id: energy_export_price_cents
         unit_of_measurement: "c/kWh"
-        device_class: monetary
         state_class: measurement
         state: >
           {% set src = states('input_select.energy_amber_live_source') %}
@@ -235,9 +233,7 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.energy_controller_mode
-    condition:
-      - condition: template
-        value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
+    condition: []
     action:
       - service: persistent_notification.create
         data:
