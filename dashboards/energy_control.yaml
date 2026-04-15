@@ -142,10 +142,10 @@ views:
           - entity: input_boolean.energy_manual_override
             name: Enable Manual Override
             icon: mdi:hand-back-right
-        footer:
-          type: markdown
-          content: >
-            ⚠️ When enabled, the controller will **not** send any commands to Sigenergy.
+
+      - type: markdown
+        content: >
+          ⚠️ When **Manual Override** is on, the controller will not send any commands to Sigenergy.
 
       # ── HA Control Switch ────────────────────────────────────
       - type: entities
@@ -153,10 +153,10 @@ views:
         entities:
           - entity: switch.sigen_plant_remote_ems_controlled_by_home_assistant
             name: Remote EMS Controlled by Home Assistant
-        footer:
-          type: markdown
-          content: >
-            ⚠️ Turn this on when you are ready for the controller to send commands to the inverter.
+
+      - type: markdown
+        content: >
+          ⚠️ Turn **Remote EMS** on when you are ready for the controller to send commands to the inverter.
 
       # ── Price Source Selection ───────────────────────────────
       - type: entities
@@ -195,12 +195,12 @@ views:
         entities:
           - entity: input_number.energy_cheap_import_threshold
             name: Cheap Import Threshold
-        footer:
-          type: markdown
-          content: >
-            **Cheap Import**: If import price ≤ this value **and** solar won't cover load,
-            the controller will charge the battery to the Minimum SOC level.
-            Prices below **0c** always trigger Force Charge regardless of this setting.
+
+      - type: markdown
+        content: >
+          **Cheap Import**: If import price ≤ this value **and** solar won't cover load,
+          the controller will charge the battery to the Minimum SOC level.
+          Prices below **0c** always trigger Force Charge regardless of this setting.
 
       # ── Controller Status ────────────────────────────────────
       - type: entities
