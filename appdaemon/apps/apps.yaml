@@ -1,0 +1,77 @@
+# AppDaemon apps.yaml – Sigenergy + Amber Energy Controller
+# ============================================================
+# Copy this file to your AppDaemon apps/ directory alongside energy_controller.py
+#
+# IMPORTANT: Adjust entity IDs to match your HA installation.
+# Sigenergy entity IDs depend on the plant/device name you set during integration
+# setup. The defaults below assume the integration slug "sigen" with no custom name.
+# Check Developer Tools → States in HA and filter for "sigen" to find your entities.
+#
+# Amber entity IDs use the site name you entered during setup.
+# "the_hump" below matches the user's site name – replace if different.
+
+energy_controller:
+  module: energy_controller
+  class: EnergyController
+
+  # ── Control interval ──────────────────────────────────────────────────────
+  # How often (seconds) to evaluate and potentially change operating mode.
+  # Price changes also trigger an immediate re-evaluation via state listeners.
+  interval: 60
+
+  # ── Sigenergy sensor entities ─────────────────────────────────────────────
+  # Plant-level sensors from TypQxQ/Sigenergy-Local-Modbus integration.
+  # Positive battery_power_entity = charging, negative = discharging.
+  # Positive grid_power_entity = importing, negative = exporting.
+  battery_soc_entity:       sensor.sigen_plant_ess_soc
+  battery_power_entity:     sensor.sigen_plant_ess_power
+  pv_power_entity:          sensor.sigen_plant_sigen_photovoltaic_power
+  grid_power_entity:        sensor.sigen_plant_grid_sensor_active_power
+  load_power_entity:        sensor.sigen_plant_total_load_power
+
+  # ── Sigenergy control entities ────────────────────────────────────────────
+  # These are disabled by default in the integration – enable them in HA first.
+  # Developer Tools → States → find these entities and enable them.
+  mode_select_entity:         select.sigen_plant_remote_ems_control_mode
+  grid_export_limit_entity:   number.sigen_plant_grid_point_maximum_export_limitation
+  pcs_export_limit_entity:    number.sigen_plant_pcs_maximum_export_limitation
+  charge_limit_entity:        number.sigen_plant_ess_max_charging_limit
+  discharge_limit_entity:     number.sigen_plant_ess_max_discharging_limit
+
+  # ── Amber Electric (built-in HA integration) ──────────────────────────────
+  # These are the standard Amber Electric HA integration entities.
+  # Prices are in $/kWh. Negative export price = receiving payment to export.
+  live_import_price_entity:   sensor.the_hump_general_price
+  live_export_price_entity:   sensor.the_hump_feed_in_price
+  forecast_import_entity:     sensor.the_hump_general_forecast
+  forecast_export_entity:     sensor.the_hump_feed_in_forecast
+
+  # ── Amber Express (custom integration) ───────────────────────────────────
+  # Only needed if you have Amber Express installed.
+  # Adjust entity IDs to match your Amber Express installation.
+  # Leave blank ("") to disable.
+  amber_express_import_entity:          sensor.the_hump_express_general_price
+  amber_express_export_entity:          sensor.the_hump_express_feed_in_price
+  amber_express_forecast_import_entity: sensor.the_hump_express_general_forecast
+  amber_express_forecast_export_entity: sensor.the_hump_express_feed_in_forecast
+
+  # ── Source selection (read from HA input_select helpers) ─────────────────
+  # Values should match the options in the input_select defined in the package YAML.
+  live_source_entity:     input_select.energy_amber_live_source
+  forecast_source_entity: input_select.energy_amber_forecast_source
+
+  # ── Solcast PV Forecast ───────────────────────────────────────────────────
+  solcast_today_entity:     sensor.solcast_pv_forecast_forecast_today
+  solcast_remaining_entity: sensor.solcast_pv_forecast_forecast_remaining_today
+
+  # ── Configuration input_number entities (set via HA UI) ──────────────────
+  expected_load_entity:           input_number.energy_expected_daily_house_load
+  max_export_kw_entity:           input_number.energy_max_export_power
+  max_charge_kw_entity:           input_number.energy_max_charge_power
+  max_discharge_kw_entity:        input_number.energy_max_discharge_power
+  battery_min_soc_entity:         input_number.energy_battery_min_soc
+  battery_full_threshold_entity:  input_number.energy_battery_full_threshold
+  cheap_threshold_entity:         input_number.energy_cheap_import_threshold
+
+  # ── Manual override ────────────────────────────────────────────────────────
+  manual_override_entity: input_boolean.energy_manual_override

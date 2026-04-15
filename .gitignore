@@ -1,0 +1,5 @@
+secrets.yaml
+.storage/
+*.log
+__pycache__/
+.claude/

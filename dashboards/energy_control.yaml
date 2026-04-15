@@ -1,0 +1,236 @@
+# Lovelace Dashboard – Sigenergy + Amber Energy Controller
+# ===========================================================
+# Add this as a new dashboard in HA:
+#   Settings → Dashboards → Add Dashboard → (from YAML)
+# Or paste into an existing dashboard's raw configuration editor.
+#
+# Uses ONLY built-in HA cards – no custom card dependencies required.
+# Optional: install "custom:mini-graph-card" from HACS for prettier charts.
+
+title: Energy Control
+views:
+  # ══════════════════════════════════════════════════════════════
+  - title: Overview
+    path: overview
+    icon: mdi:solar-power
+    badges: []
+    cards:
+
+      # ── Current Mode Banner ──────────────────────────────────
+      - type: markdown
+        content: >
+          {% set mode = states('sensor.energy_controller_mode') %}
+          {% set icons = {
+            'Force Charge':    '⚡',
+            'Cheap Charge':    '🔋',
+            'Hold Battery':    '⏳',
+            'Maximum Export':  '📤',
+            'Self Consume':    '☀️',
+            'No Export':       '🏠',
+            'Manual Override': '🔧',
+            'Error':           '❌'
+          } %}
+          {% set icon = icons.get(mode, '❓') %}
+          ## {{ icon }} {{ mode }}
+          {{ states('sensor.energy_controller_reason') }}
+
+      # ── Live Prices Row ──────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: stat
+            entity: sensor.energy_import_price_cents
+            name: Import Price
+            icon: mdi:transmission-tower
+            unit: c/kWh
+          - type: stat
+            entity: sensor.energy_export_price_cents
+            name: Export Price
+            icon: mdi:transmission-tower-export
+            unit: c/kWh
+
+      # ── Battery SOC Gauge ────────────────────────────────────
+      - type: gauge
+        entity: sensor.sigen_plant_ess_soc
+        name: Battery State of Charge
+        unit: "%"
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          green: 50
+          yellow: 20
+          red: 0
+
+      # ── Power Flow Summary ───────────────────────────────────
+      - type: entities
+        title: Live Power Flow
+        entities:
+          - entity: sensor.sigen_plant_sigen_photovoltaic_power
+            name: Solar Generation
+            icon: mdi:solar-power
+          - entity: sensor.sigen_plant_total_load_power
+            name: House Load
+            icon: mdi:home-lightning-bolt
+          - entity: sensor.sigen_plant_ess_power
+            name: Battery Power (+ charge / - discharge)
+            icon: mdi:battery-charging
+          - entity: sensor.grid_net_power
+            name: Grid Power (+ import / - export)
+            icon: mdi:transmission-tower
+          - entity: sensor.sigen_plant_ess_soc
+            name: Battery SOC
+            icon: mdi:battery
+
+      # ── Solar vs Load Today ──────────────────────────────────
+      - type: markdown
+        content: >
+          {% set forecast = state_attr('sensor.solar_vs_load_today', 'solar_forecast') | float(0) %}
+          {% set load = state_attr('sensor.solar_vs_load_today', 'expected_load') | float(0) %}
+          {% set surplus = states('sensor.solar_vs_load_today') | float(0) %}
+          ## ☀️ Today's Solar vs Load
+
+          | | kWh |
+          |---|---|
+          | Solar Forecast | {{ forecast | round(1) }} kWh |
+          | Expected Load | {{ load | round(1) }} kWh |
+          | **{{ 'Surplus' if surplus >= 0 else 'Deficit' }}** | **{{ surplus | abs | round(1) }} kWh** |
+
+          {% if surplus >= 0 %}
+          ✅ Solar expected to cover load today
+          {% else %}
+          ⚠️ Solar may not cover load – controller will seek cheap import windows
+          {% endif %}
+
+      # ── Today's Action Plan ──────────────────────────────────
+      - type: markdown
+        title: Today's Price & Action Plan
+        content: >
+          {{ state_attr('sensor.energy_today_plan', 'plan_markdown') or 'No forecast data available yet' }}
+
+      # ── Price History Graph ──────────────────────────────────
+      - type: history-graph
+        title: Import / Export Price ($/kWh)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.the_hump_general_price
+            name: Import
+          - entity: sensor.the_hump_feed_in_price
+            name: Export (Feed-in)
+
+      # ── Power History Graph ──────────────────────────────────
+      - type: history-graph
+        title: Power Flow History
+        hours_to_show: 12
+        entities:
+          - entity: sensor.sigen_plant_sigen_photovoltaic_power
+            name: Solar
+          - entity: sensor.sigen_plant_total_load_power
+            name: Load
+          - entity: sensor.sigen_plant_ess_power
+            name: Battery
+          - entity: sensor.grid_net_power
+            name: Grid
+
+      # ── Mode Change History ──────────────────────────────────
+      - type: history-graph
+        title: Controller Mode History
+        hours_to_show: 24
+        entities:
+          - entity: sensor.energy_controller_mode
+            name: Mode
+
+  # ══════════════════════════════════════════════════════════════
+  - title: Configuration
+    path: configuration
+    icon: mdi:cog
+    cards:
+
+      # ── Manual Override ─────────────────────────────────────
+      - type: entities
+        title: Manual Override
+        entities:
+          - entity: input_boolean.energy_manual_override
+            name: Enable Manual Override
+            icon: mdi:hand-back-right
+        footer:
+          type: markdown
+          content: >
+            ⚠️ When enabled, the controller will **not** send any commands to Sigenergy.
+            Use the Sigenergy app or HA integration controls directly.
+
+      # ── Price Source Selection ───────────────────────────────
+      - type: entities
+        title: Price Data Sources
+        entities:
+          - entity: input_select.energy_amber_live_source
+            name: Live Price Source
+          - entity: input_select.energy_amber_forecast_source
+            name: Forecast Price Source
+
+      # ── Load & Power Parameters ──────────────────────────────
+      - type: entities
+        title: Load & Power Configuration
+        entities:
+          - entity: input_number.energy_expected_daily_house_load
+            name: Expected Daily House Load
+          - entity: input_number.energy_max_export_power
+            name: Max Export Power
+          - entity: input_number.energy_max_charge_power
+            name: Max Charge Power
+          - entity: input_number.energy_max_discharge_power
+            name: Max Discharge Power
+
+      # ── Battery Parameters ───────────────────────────────────
+      - type: entities
+        title: Battery Configuration
+        entities:
+          - entity: input_number.energy_battery_min_soc
+            name: Minimum SOC (cheap charge target)
+          - entity: input_number.energy_battery_full_threshold
+            name: "Full Threshold (triggers Max Export)"
+
+      # ── Price Thresholds ─────────────────────────────────────
+      - type: entities
+        title: Price Thresholds
+        entities:
+          - entity: input_number.energy_cheap_import_threshold
+            name: Cheap Import Threshold
+        footer:
+          type: markdown
+          content: >
+            **Cheap Import**: If import price ≤ this value **and** solar won't cover load,
+            the controller will charge the battery to the Minimum SOC level.
+
+            Import prices below **0c** always trigger Force Charge regardless of this setting.
+
+      # ── Controller Status ────────────────────────────────────
+      - type: entities
+        title: Controller Status
+        entities:
+          - entity: sensor.energy_controller_mode
+            name: Current Mode
+          - entity: sensor.energy_controller_reason
+            name: Reason
+          - entity: sensor.energy_today_plan
+            name: Solar Day Summary
+
+      # ── Sigenergy Control Entity Status ─────────────────────
+      - type: entities
+        title: Sigenergy Control Entities (current values)
+        entities:
+          - entity: select.sigen_plant_remote_ems_control_mode
+            name: Operating Mode
+          - entity: number.sigen_plant_grid_point_maximum_export_limitation
+            name: Grid Export Limit
+          - entity: number.sigen_plant_pcs_maximum_export_limitation
+            name: PCS Export Limit
+          - entity: number.sigen_plant_ess_max_charging_limit
+            name: Max Charging Limit
+          - entity: number.sigen_plant_ess_max_discharging_limit
+            name: Max Discharging Limit
+        footer:
+          type: markdown
+          content: >
+            ℹ️ These entities must be **enabled** in HA before the controller can use them.
+            Go to Developer Tools → States, find each entity, and enable it.
+            Also ensure **Remote EMS Control** is enabled on the Sigenergy plant.

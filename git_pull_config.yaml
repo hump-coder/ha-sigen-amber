@@ -1,0 +1,24 @@
+# Git Pull Add-on Configuration
+# ================================
+# Install the "Git pull" add-on from the HA Supervisor Add-on Store, then
+# paste this into its configuration tab (or set fields manually via the UI).
+#
+# The add-on pulls this repo into /config on HA startup and on a schedule.
+# Files land directly in the right places:
+#   packages/           → /config/packages/
+#   appdaemon/apps/     → /config/appdaemon/apps/  (if AppDaemon add-on is used)
+#   dashboards/         → /config/dashboards/
+
+repository: "https://github.com/hump-coder/ha-sigen-amber"
+auto_restart: false
+restart_ignore:
+  - packages/
+  - dashboards/
+  - appdaemon/
+repeat:
+  enabled: true
+  interval: 300   # pull every 5 minutes (adjust as desired)
+deployment_user: ""
+deployment_password: ""
+deployment_key: ""
+deployment_key_protocol: "rsa"
