@@ -23,18 +23,17 @@ energy_controller:
   # Plant-level sensors from TypQxQ/Sigenergy-Local-Modbus integration.
   # Positive battery_power_entity = charging, negative = discharging.
   # Positive grid_power_entity = importing, negative = exporting.
-  battery_soc_entity:       sensor.sigen_plant_ess_soc
-  battery_power_entity:     sensor.sigen_plant_ess_power
-  pv_power_entity:          sensor.sigen_plant_sigen_photovoltaic_power
-  grid_power_entity:        sensor.sigen_plant_grid_sensor_active_power
+  battery_soc_entity:       sensor.sigen_plant_battery_state_of_charge
+  battery_power_entity:     sensor.sigen_plant_battery_power
+  pv_power_entity:          sensor.sigen_plant_sigen_pv_power
+  grid_power_entity:        sensor.sigen_plant_grid_active_power
   load_power_entity:        sensor.sigen_plant_total_load_power
 
   # ── Sigenergy control entities ────────────────────────────────────────────
-  # These are disabled by default in the integration – enable them in HA first.
-  # Developer Tools → States → find these entities and enable them.
+  # Note: switch.sigen_plant_remote_ems_controlled_by_home_assistant must be ON
   mode_select_entity:         select.sigen_plant_remote_ems_control_mode
-  grid_export_limit_entity:   number.sigen_plant_grid_point_maximum_export_limitation
-  pcs_export_limit_entity:    number.sigen_plant_pcs_maximum_export_limitation
+  grid_export_limit_entity:   number.sigen_plant_grid_export_limitation
+  pcs_export_limit_entity:    number.sigen_plant_pcs_export_limitation
   charge_limit_entity:        number.sigen_plant_ess_max_charging_limit
   discharge_limit_entity:     number.sigen_plant_ess_max_discharging_limit
 

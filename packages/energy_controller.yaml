@@ -149,7 +149,7 @@ template:
         device_class: power
         state_class: measurement
         state: >
-          {{ states('sensor.sigen_plant_grid_sensor_active_power') | float(0) | round(2) }}
+          {{ states('sensor.sigen_plant_grid_active_power') | float(0) | round(2) }}
 
       # Solar surplus/deficit vs expected load today
       - name: "Solar vs Load Today"
@@ -171,7 +171,7 @@ template:
       - name: "Battery SOC Status"
         unique_id: battery_soc_status
         state: >
-          {% set soc = states('sensor.sigen_plant_ess_soc') | float(0) %}
+          {% set soc = states('sensor.sigen_plant_battery_state_of_charge') | float(0) %}
           {% set min_soc = states('input_number.energy_battery_min_soc') | float(20) %}
           {% set full = states('input_number.energy_battery_full_threshold') | float(95) %}
           {% if soc >= full %}
@@ -184,24 +184,24 @@ template:
             Low
           {% endif %}
         attributes:
-          soc_pct: "{{ states('sensor.sigen_plant_ess_soc') | float(0) }}"
+          soc_pct: "{{ states('sensor.sigen_plant_battery_state_of_charge') | float(0) }}"
 
       # Current power flow summary (for a single glance card)
       - name: "Power Flow Summary"
         unique_id: power_flow_summary
         state: >
-          {% set solar = states('sensor.sigen_plant_sigen_photovoltaic_power') | float(0) %}
+          {% set solar = states('sensor.sigen_plant_sigen_pv_power') | float(0) %}
           {% set load  = states('sensor.sigen_plant_total_load_power') | float(0) %}
-          {% set batt  = states('sensor.sigen_plant_ess_power') | float(0) %}
-          {% set grid  = states('sensor.sigen_plant_grid_sensor_active_power') | float(0) %}
+          {% set batt  = states('sensor.sigen_plant_battery_power') | float(0) %}
+          {% set grid  = states('sensor.sigen_plant_grid_active_power') | float(0) %}
           {% set grid_dir = 'Import' if grid > 0 else 'Export' %}
           ☀️ {{ solar | round(1) }} kW → 🏠 {{ load | round(1) }} kW | 🔋 {{ batt | round(1) }} kW | ⚡ {{ grid_dir }} {{ (grid | abs) | round(1) }} kW
         attributes:
-          solar_kw: "{{ states('sensor.sigen_plant_sigen_photovoltaic_power') | float(0) | round(2) }}"
+          solar_kw: "{{ states('sensor.sigen_plant_sigen_pv_power') | float(0) | round(2) }}"
           load_kw:  "{{ states('sensor.sigen_plant_total_load_power') | float(0) | round(2) }}"
-          battery_kw: "{{ states('sensor.sigen_plant_ess_power') | float(0) | round(2) }}"
-          grid_kw: "{{ states('sensor.sigen_plant_grid_sensor_active_power') | float(0) | round(2) }}"
-          battery_soc: "{{ states('sensor.sigen_plant_ess_soc') | float(0) }}"
+          battery_kw: "{{ states('sensor.sigen_plant_battery_power') | float(0) | round(2) }}"
+          grid_kw: "{{ states('sensor.sigen_plant_grid_active_power') | float(0) | round(2) }}"
+          battery_soc: "{{ states('sensor.sigen_plant_battery_state_of_charge') | float(0) }}"
 
 # ── Automations ──────────────────────────────────────────────────────────
 
