@@ -28,6 +28,9 @@ views:
           ## {{ icon }} {{ mode }}
           {{ states('sensor.energy_controller_reason') }}
 
+      # ── Override Buttons (reusable – include in any dashboard) ──
+      - !include energy_override_buttons.yaml
+
       # ── Live Prices Row ──────────────────────────────────────
       - type: horizontal-stack
         cards:
@@ -135,80 +138,8 @@ views:
     icon: mdi:cog
     cards:
 
-      # ── Manual Mode Buttons ──────────────────────────────────
-      - type: markdown
-        content: "## 🔧 Manual Override Buttons"
-
-      - type: horizontal-stack
-        cards:
-          - type: button
-            name: "↩️ Auto"
-            icon: mdi:auto-mode
-            tap_action:
-              action: call-service
-              service: input_select.select_option
-              data:
-                entity_id: input_select.energy_manual_mode
-                option: "Auto"
-          - type: button
-            name: "📤 Export Battery"
-            icon: mdi:battery-arrow-up
-            tap_action:
-              action: call-service
-              service: input_select.select_option
-              data:
-                entity_id: input_select.energy_manual_mode
-                option: "Export Battery"
-          - type: button
-            name: "🛑 Stop Batt Export"
-            icon: mdi:battery-arrow-up-outline
-            tap_action:
-              action: call-service
-              service: input_select.select_option
-              data:
-                entity_id: input_select.energy_manual_mode
-                option: "Stop Battery Export"
-
-      - type: horizontal-stack
-        cards:
-          - type: button
-            name: "⚡ Charge from Grid"
-            icon: mdi:battery-charging
-            tap_action:
-              action: call-service
-              service: input_select.select_option
-              data:
-                entity_id: input_select.energy_manual_mode
-                option: "Charge from Grid"
-          - type: button
-            name: "🏠 No Export"
-            icon: mdi:transmission-tower-off
-            tap_action:
-              action: call-service
-              service: input_select.select_option
-              data:
-                entity_id: input_select.energy_manual_mode
-                option: "No Export"
-          - type: button
-            name: "☀️ Self Consume"
-            icon: mdi:home-lightning-bolt
-            tap_action:
-              action: call-service
-              service: input_select.select_option
-              data:
-                entity_id: input_select.energy_manual_mode
-                option: "Self Consume"
-
-      - type: entities
-        title: Current Manual Mode
-        entities:
-          - entity: input_select.energy_manual_mode
-            name: Active Override
-
-      - type: markdown
-        content: >
-          Press **↩️ Auto** to return to automatic control.
-          All other buttons stay in effect until you press Auto.
+      # ── Override Buttons (same as Overview tab) ─────────────
+      - !include energy_override_buttons.yaml
 
       # ── Hands-off Override ───────────────────────────────────
       - type: entities

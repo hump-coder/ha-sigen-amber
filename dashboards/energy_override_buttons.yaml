@@ -1,0 +1,99 @@
+# Energy Controller Override Buttons
+# =====================================
+# Reusable card include for any Lovelace dashboard.
+#
+# Usage in any dashboard YAML:
+#   - !include energy_override_buttons.yaml
+#
+# This file must be in the same directory as the dashboard that includes it,
+# or provide a relative path, e.g.:
+#   - !include dashboards/energy_override_buttons.yaml
+
+type: vertical-stack
+cards:
+  - type: markdown
+    content: >
+      {% set mode = states('input_select.energy_manual_mode') %}
+      {% set ctrl = states('sensor.energy_controller_mode') %}
+      {% if mode != 'Auto' %}
+      ### 🔧 Manual Override Active: **{{ mode }}**
+      {% else %}
+      ### ⚡ Energy Override — Auto ({{ ctrl }})
+      {% endif %}
+
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: "Auto"
+        icon: mdi:auto-mode
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          data:
+            entity_id: input_select.energy_manual_mode
+            option: "Auto"
+        card_mod:
+          style: |
+            ha-card {
+              {% if states('input_select.energy_manual_mode') == 'Auto' %}
+              border: 2px solid var(--success-color);
+              {% endif %}
+            }
+
+      - type: button
+        name: "Export Battery"
+        icon: mdi:battery-arrow-up
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          data:
+            entity_id: input_select.energy_manual_mode
+            option: "Export Battery"
+
+      - type: button
+        name: "Stop Batt Export"
+        icon: mdi:battery-arrow-up-outline
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          data:
+            entity_id: input_select.energy_manual_mode
+            option: "Stop Battery Export"
+
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: "Charge from Grid"
+        icon: mdi:battery-charging
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          data:
+            entity_id: input_select.energy_manual_mode
+            option: "Charge from Grid"
+
+      - type: button
+        name: "No Export"
+        icon: mdi:transmission-tower-off
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          data:
+            entity_id: input_select.energy_manual_mode
+            option: "No Export"
+
+      - type: button
+        name: "Self Consume"
+        icon: mdi:home-lightning-bolt
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          data:
+            entity_id: input_select.energy_manual_mode
+            option: "Self Consume"
