@@ -105,6 +105,20 @@ input_boolean:
     initial: false
     icon: mdi:hand-back-right
 
+input_select:
+
+  energy_manual_mode:
+    name: "Manual Mode Override"
+    options:
+      - "Auto"
+      - "Export Battery"
+      - "Stop Battery Export"
+      - "Charge from Grid"
+      - "No Export"
+      - "Self Consume"
+    initial: "Auto"
+    icon: mdi:dip-switch
+
 # ── Template sensors ──────────────────────────────────────────────────────
 
 template:

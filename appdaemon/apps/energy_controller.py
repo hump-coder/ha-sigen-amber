@@ -33,14 +33,30 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 
 class Mode(str, Enum):
-    FORCE_CHARGE  = "Force Charge"       # Negative import price – grid charges battery
-    CHEAP_CHARGE  = "Cheap Charge"       # Charging to meet minimum SOC at low price
-    HOLD_BATTERY  = "Hold Battery"       # Preserving charge while awaiting cheap window
-    EXPORT_MAX    = "Maximum Export"     # Battery full + good export price
-    SELF_CONSUME  = "Self Consume"       # Normal operation with export enabled
-    NO_EXPORT     = "No Export"          # Export price ≤ 0 – curtail all export
-    MANUAL        = "Manual Override"    # User has taken manual control
-    ERROR         = "Error"             # Sensor data unavailable
+    FORCE_CHARGE        = "Force Charge"         # Negative import price – grid charges battery
+    CHEAP_CHARGE        = "Cheap Charge"         # Charging to meet minimum SOC at low price
+    HOLD_BATTERY        = "Hold Battery"         # Preserving charge while awaiting cheap window
+    EXPORT_MAX          = "Maximum Export"       # Battery full + good export price
+    SELF_CONSUME        = "Self Consume"         # Normal operation with export enabled
+    NO_EXPORT           = "No Export"            # Export price ≤ 0 – curtail all export
+    # Manual override modes (set via dashboard buttons, stay until cleared)
+    MAN_EXPORT_BATTERY  = "Manual: Export Battery"       # Force discharge + export
+    MAN_STOP_BATT_EXP   = "Manual: Stop Battery Export"  # Solar export ok, no battery discharge
+    MAN_CHARGE_GRID     = "Manual: Charge from Grid"     # Force charge from grid
+    MAN_NO_EXPORT       = "Manual: No Export"            # No grid export at all
+    MAN_SELF_CONSUME    = "Manual: Self Consume"         # Normal self-consume + export
+    MANUAL              = "Manual Override"              # Hands-off (legacy boolean)
+    ERROR               = "Error"                        # Sensor data unavailable
+
+
+# Map input_select option strings → Mode enum
+MANUAL_MODE_MAP = {
+    "Export Battery":      Mode.MAN_EXPORT_BATTERY,
+    "Stop Battery Export": Mode.MAN_STOP_BATT_EXP,
+    "Charge from Grid":    Mode.MAN_CHARGE_GRID,
+    "No Export":           Mode.MAN_NO_EXPORT,
+    "Self Consume":        Mode.MAN_SELF_CONSUME,
+}
 
 
 # Sigenergy select entity option strings (from Sigenergy Local Modbus integration)
@@ -53,11 +69,16 @@ SIGEN_MODE_STANDBY        = "Standby"
 
 # Mode icons for dashboard display
 MODE_ICONS = {
-    Mode.FORCE_CHARGE:  "⚡ CHARGING (FREE/PAID GRID)",
-    Mode.CHEAP_CHARGE:  "🔋 CHEAP CHARGE",
-    Mode.HOLD_BATTERY:  "⏳ HOLD BATTERY",
-    Mode.EXPORT_MAX:    "📤 MAX EXPORT",
-    Mode.SELF_CONSUME:  "☀️ SELF CONSUME + EXPORT",
+    Mode.FORCE_CHARGE:       "⚡ CHARGING (FREE/PAID GRID)",
+    Mode.CHEAP_CHARGE:       "🔋 CHEAP CHARGE",
+    Mode.HOLD_BATTERY:       "⏳ HOLD BATTERY",
+    Mode.EXPORT_MAX:         "📤 MAX EXPORT",
+    Mode.SELF_CONSUME:       "☀️ SELF CONSUME + EXPORT",
+    Mode.MAN_EXPORT_BATTERY: "🔧 MANUAL: EXPORT BATTERY",
+    Mode.MAN_STOP_BATT_EXP:  "🔧 MANUAL: STOP BATTERY EXPORT",
+    Mode.MAN_CHARGE_GRID:    "🔧 MANUAL: CHARGE FROM GRID",
+    Mode.MAN_NO_EXPORT:      "🔧 MANUAL: NO EXPORT",
+    Mode.MAN_SELF_CONSUME:   "🔧 MANUAL: SELF CONSUME",
     Mode.NO_EXPORT:     "🏠 SELF CONSUME ONLY",
     Mode.MANUAL:        "🔧 MANUAL OVERRIDE",
     Mode.ERROR:         "❌ ERROR – CHECK SENSORS",
@@ -116,10 +137,24 @@ class EnergyController(hass.Hass):
     def control_loop(self, kwargs):
         """Evaluate state and apply optimal operating mode."""
         try:
-            # Manual override check
+            # Manual override (boolean hands-off switch)
             if self._manual_override_active():
-                self._publish_state(Mode.MANUAL, "Manual override is enabled in HA")
+                self._publish_state(Mode.MANUAL, "Manual override is enabled – controller is hands off")
                 self._last_mode = Mode.MANUAL
+                return
+
+            # Named manual mode buttons
+            manual_mode = self._manual_mode_select()
+            if manual_mode is not None:
+                state = self._read_state()
+                if state:
+                    self._apply_mode(manual_mode, state)
+                self._publish_state(manual_mode,
+                    f"Manual override: {self.get_state(self.args.get('manual_mode_entity', ''))} "
+                    f"– set to Auto to return to automatic control")
+                if manual_mode != self._last_mode:
+                    self.log(f"★ Mode: {self._last_mode} → {manual_mode.value} (manual)")
+                    self._last_mode = manual_mode
                 return
 
             state = self._read_state()
@@ -386,7 +421,42 @@ class EnergyController(hass.Hass):
             self._set_discharge_limit(max_dis)
             self._set_export_limits(0.0)
 
-        # MANUAL and ERROR modes: do nothing, don't touch hardware
+        elif mode == Mode.MAN_EXPORT_BATTERY:
+            # Actively discharge battery to grid at full rate
+            self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
+            self._set_charge_limit(0.0)
+            self._set_discharge_limit(max_dis)
+            self._set_export_limits(max_exp)
+
+        elif mode == Mode.MAN_STOP_BATT_EXP:
+            # Solar can still export but battery must not discharge to grid
+            self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
+            self._set_charge_limit(max_chg)
+            self._set_discharge_limit(0.0)
+            self._set_export_limits(max_exp if exp_pos else 0.0)
+
+        elif mode == Mode.MAN_CHARGE_GRID:
+            # Force charge from grid at max rate
+            self._set_sigen_mode(SIGEN_MODE_CHARGE_GRID)
+            self._set_charge_limit(max_chg)
+            self._set_discharge_limit(0.0)
+            self._set_export_limits(0.0)
+
+        elif mode == Mode.MAN_NO_EXPORT:
+            # No grid export at all – self consume only
+            self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
+            self._set_charge_limit(max_chg)
+            self._set_discharge_limit(max_dis)
+            self._set_export_limits(0.0)
+
+        elif mode == Mode.MAN_SELF_CONSUME:
+            # Normal self consume with export allowed
+            self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
+            self._set_charge_limit(max_chg)
+            self._set_discharge_limit(max_dis)
+            self._set_export_limits(max_exp)
+
+        # MANUAL (hands-off) and ERROR modes: do nothing, don't touch hardware
 
     # ------------------------------------------------------------------
     # Sigenergy entity writers
@@ -549,6 +619,14 @@ class EnergyController(hass.Hass):
         if not entity:
             return False
         return self.get_state(entity) == "on"
+
+    def _manual_mode_select(self) -> "Mode | None":
+        """Return the active manual Mode if input_select is not 'Auto', else None."""
+        entity = self.args.get("manual_mode_entity", "")
+        if not entity:
+            return None
+        value = self.get_state(entity)
+        return MANUAL_MODE_MAP.get(value)  # None if "Auto" or unrecognised
 
     def _get_float(self, entity_id: str, default: float | None = None) -> float | None:
         """Safely read an entity state as float. Returns default (or None) on error."""

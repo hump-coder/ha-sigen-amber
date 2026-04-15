@@ -135,17 +135,92 @@ views:
     icon: mdi:cog
     cards:
 
-      # ── Manual Override ─────────────────────────────────────
+      # ── Manual Mode Buttons ──────────────────────────────────
+      - type: markdown
+        content: "## 🔧 Manual Override Buttons"
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: "↩️ Auto"
+            icon: mdi:auto-mode
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              data:
+                entity_id: input_select.energy_manual_mode
+                option: "Auto"
+          - type: button
+            name: "📤 Export Battery"
+            icon: mdi:battery-arrow-up
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              data:
+                entity_id: input_select.energy_manual_mode
+                option: "Export Battery"
+          - type: button
+            name: "🛑 Stop Batt Export"
+            icon: mdi:battery-arrow-up-outline
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              data:
+                entity_id: input_select.energy_manual_mode
+                option: "Stop Battery Export"
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: "⚡ Charge from Grid"
+            icon: mdi:battery-charging
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              data:
+                entity_id: input_select.energy_manual_mode
+                option: "Charge from Grid"
+          - type: button
+            name: "🏠 No Export"
+            icon: mdi:transmission-tower-off
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              data:
+                entity_id: input_select.energy_manual_mode
+                option: "No Export"
+          - type: button
+            name: "☀️ Self Consume"
+            icon: mdi:home-lightning-bolt
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              data:
+                entity_id: input_select.energy_manual_mode
+                option: "Self Consume"
+
       - type: entities
-        title: Manual Override
+        title: Current Manual Mode
+        entities:
+          - entity: input_select.energy_manual_mode
+            name: Active Override
+
+      - type: markdown
+        content: >
+          Press **↩️ Auto** to return to automatic control.
+          All other buttons stay in effect until you press Auto.
+
+      # ── Hands-off Override ───────────────────────────────────
+      - type: entities
+        title: Hands-off Override (controller stops sending commands)
         entities:
           - entity: input_boolean.energy_manual_override
-            name: Enable Manual Override
+            name: Enable Hands-off Override
             icon: mdi:hand-back-right
 
       - type: markdown
         content: >
-          ⚠️ When **Manual Override** is on, the controller will not send any commands to Sigenergy.
+          ⚠️ When **Hands-off Override** is on, the controller will not send any commands to Sigenergy.
 
       # ── HA Control Switch ────────────────────────────────────
       - type: entities

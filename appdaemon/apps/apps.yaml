@@ -74,3 +74,4 @@ energy_controller:
 
   # ── Manual override ────────────────────────────────────────────────────────
   manual_override_entity: input_boolean.energy_manual_override
+  manual_mode_entity:     input_select.energy_manual_mode
