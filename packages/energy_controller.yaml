@@ -116,6 +116,7 @@ input_select:
       - "Charge from Grid"
       - "No Export"
       - "Self Consume"
+      - "Solar Priority"
     initial: "Auto"
     icon: mdi:dip-switch
 

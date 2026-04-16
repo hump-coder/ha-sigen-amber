@@ -97,3 +97,14 @@ cards:
           data:
             entity_id: input_select.energy_manual_mode
             option: "Self Consume"
+
+      - type: button
+        name: "Solar Priority"
+        icon: mdi:solar-power
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_select.select_option
+          data:
+            entity_id: input_select.energy_manual_mode
+            option: "Solar Priority"

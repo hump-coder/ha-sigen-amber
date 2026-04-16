@@ -45,6 +45,7 @@ class Mode(str, Enum):
     MAN_CHARGE_GRID     = "Manual: Charge from Grid"     # Force charge from grid
     MAN_NO_EXPORT       = "Manual: No Export"            # No grid export at all
     MAN_SELF_CONSUME    = "Manual: Self Consume"         # Normal self-consume + export
+    MAN_SOLAR_PRIORITY  = "Manual: Solar Priority"       # Solar+battery cover load, no import/export
     MANUAL              = "Manual Override"              # Hands-off (legacy boolean)
     ERROR               = "Error"                        # Sensor data unavailable
 
@@ -56,6 +57,7 @@ MANUAL_MODE_MAP = {
     "Charge from Grid":    Mode.MAN_CHARGE_GRID,
     "No Export":           Mode.MAN_NO_EXPORT,
     "Self Consume":        Mode.MAN_SELF_CONSUME,
+    "Solar Priority":      Mode.MAN_SOLAR_PRIORITY,
 }
 
 
@@ -79,6 +81,7 @@ MODE_ICONS = {
     Mode.MAN_CHARGE_GRID:    "🔧 MANUAL: CHARGE FROM GRID",
     Mode.MAN_NO_EXPORT:      "🔧 MANUAL: NO EXPORT",
     Mode.MAN_SELF_CONSUME:   "🔧 MANUAL: SELF CONSUME",
+    Mode.MAN_SOLAR_PRIORITY: "🔧 MANUAL: SOLAR PRIORITY",
     Mode.NO_EXPORT:     "🏠 SELF CONSUME ONLY",
     Mode.MANUAL:        "🔧 MANUAL OVERRIDE",
     Mode.ERROR:         "❌ ERROR – CHECK SENSORS",
@@ -455,6 +458,14 @@ class EnergyController(hass.Hass):
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(max_dis)
             self._set_export_limits(max_exp)
+
+        elif mode == Mode.MAN_SOLAR_PRIORITY:
+            # ESS First discharge: battery actively covers load to avoid grid import
+            # Solar can still charge battery when surplus; no export to grid
+            self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
+            self._set_charge_limit(max_chg)
+            self._set_discharge_limit(max_dis)
+            self._set_export_limits(0.0)
 
         # MANUAL (hands-off) and ERROR modes: do nothing, don't touch hardware
 
