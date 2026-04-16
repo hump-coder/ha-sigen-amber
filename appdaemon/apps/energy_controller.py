@@ -231,9 +231,11 @@ class EnergyController(hass.Hass):
                 "max_export_kw":        self._get_float(self.args["max_export_kw_entity"], 10.0),
                 "max_charge_kw":        self._get_float(self.args["max_charge_kw_entity"], 10.0),
                 "max_discharge_kw":     self._get_float(self.args["max_discharge_kw_entity"], 10.0),
-                "battery_min_soc":      self._get_float(self.args["battery_min_soc_entity"], 20.0),
-                "export_min_soc":       self._get_float(self.args["export_min_soc_entity"], 20.0),
-                "battery_full_pct":     self._get_float(self.args["battery_full_threshold_entity"], 95.0),
+                "battery_min_soc":        self._get_float(self.args["battery_min_soc_entity"], 20.0),
+                "export_min_soc":         self._get_float(self.args["export_min_soc_entity"], 20.0),
+                "battery_capacity_kwh":   self._get_float(self.args.get("battery_capacity_kwh_entity", ""), 0.0),
+                "overnight_standing_load_kw": self._get_float(self.args.get("overnight_load_entity", ""), 1.0),
+                "battery_full_pct":       self._get_float(self.args["battery_full_threshold_entity"], 95.0),
                 "cheap_threshold_c":    self._get_float(self.args["cheap_threshold_entity"], 10.0),
                 "min_export_price_c":   self._get_float(self.args["min_export_price_entity"], 0.0),
                 "forecast_prices":      self._forecast_prices(),
@@ -840,14 +842,18 @@ class EnergyController(hass.Hass):
         """
         Return the effective battery SOC floor for grid export.
 
-        Outside the morning window the configured export_min_soc is returned
-        unchanged.  Within the morning window (default 07:30–11:00) the floor
-        is relaxed toward battery_min_soc in proportion to how much the
-        Solcast morning-window solar forecast exceeds the morning load.
+        Outside the relaxation window (default 22:00–11:00) the configured
+        export_min_soc is returned unchanged.
 
-        The logic: if morning solar comfortably covers morning load we can
-        afford to let the battery run lower during the price spike, because
-        the subsequent solar will replenish it without needing to import.
+        Inside the window the floor is calculated from a real energy balance:
+          - overnight_kwh : standing load × hours remaining until solar starts
+          - morning_deficit_kwh : morning load not covered by Solcast forecast
+          - required_soc  : battery_min_soc + total_needed / capacity × 100
+
+        This ensures the battery always holds enough charge to cover overnight
+        load AND any morning solar shortfall without needing to import during
+        the expensive morning price spike.  Falls back to the surplus-ratio
+        method when battery capacity is not configured.
         """
         base  = state["export_min_soc"]
         floor = state["battery_min_soc"]
@@ -861,7 +867,7 @@ class EnergyController(hass.Hass):
         hour         = now.hour + now.minute / 60.0
 
         # Relaxation window spans midnight: relax_start (e.g. 22:00) → morning_end (e.g. 11:00).
-        # Outside that window solar is either generating (day) or the evening is too early to act.
+        # Outside that window solar is either generating (day) or evening is too early to act.
         if not (hour >= relax_start or hour < morning_end):
             return base, f"export min SOC {base:.0f}% (outside relaxation window {relax_start:.0f}:00–{morning_end:.0f}:00)"
 
@@ -869,6 +875,32 @@ class EnergyController(hass.Hass):
         if m is None:
             return base, f"export min SOC {base:.0f}% (no Solcast data or load unconfigured)"
 
+        battery_capacity = state["battery_capacity_kwh"]
+
+        if battery_capacity > 0:
+            # ── Full energy-balance calculation ──────────────────────────────
+            morning_start = m["morning_start"]
+
+            # Hours remaining until solar generation begins (handles midnight wrap)
+            if hour >= relax_start:          # evening side: e.g. 22:00 → 7:30 = 9.5 h
+                hours_until_solar = (24.0 - hour) + morning_start
+            else:                            # pre-dawn side: e.g. 3:00 → 7:30 = 4.5 h
+                hours_until_solar = max(0.0, morning_start - hour)
+
+            overnight_kwh       = state["overnight_standing_load_kw"] * hours_until_solar
+            morning_deficit_kwh = max(0.0, -m["surplus"])   # surplus<0 means solar < load
+            total_needed_kwh    = overnight_kwh + morning_deficit_kwh
+
+            required_soc  = floor + (total_needed_kwh / battery_capacity * 100.0)
+            effective_min = round(min(base, max(floor, required_soc)), 1)
+
+            return effective_min, (
+                f"export min SOC {effective_min:.0f}% "
+                f"(overnight {overnight_kwh:.1f} kWh + morning deficit {morning_deficit_kwh:.1f} kWh"
+                f" = {total_needed_kwh:.1f} kWh needed, {hours_until_solar:.1f}h until solar)"
+            )
+
+        # ── Fallback: no battery capacity configured – use surplus ratio ─────
         if m["surplus"] <= 0:
             return base, (
                 f"export min SOC {base:.0f}% – morning solar "
@@ -881,7 +913,7 @@ class EnergyController(hass.Hass):
             f"export min SOC {effective_min:.0f}% (base {base:.0f}% → "
             f"floor {floor:.0f}% | morning solar {m['effective_solar']:.1f} kWh, "
             f"load {m['morning_load_kwh']:.1f} kWh, surplus {m['surplus']:.1f} kWh, "
-            f"relax {m['relax_factor']:.0%})"
+            f"relax {m['relax_factor']:.0%}) — set battery capacity for precise floor"
         )
 
     def _solcast_window_kwh(self, start_hour: float, end_hour: float) -> float | None:

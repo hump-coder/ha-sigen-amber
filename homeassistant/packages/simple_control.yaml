@@ -1,0 +1,98 @@
+# Simple Sigenergy Control Package
+# Three manual buttons – no automation, no AppDaemon required.
+#
+# Export Solar  – solar exports to grid, battery stays put
+# Local Only    – solar + battery cover load, export solar surplus
+# No Export     – solar + battery cover load, nothing sent to grid
+
+script:
+
+  sigen_export_solar:
+    alias: "Export Solar"
+    icon: mdi:solar-power
+    sequence:
+      - service: select.select_option
+        target:
+          entity_id: select.sigen_plant_remote_ems_control_mode
+        data:
+          option: "Maximum Self Consumption"
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_ess_max_charging_limit
+        data:
+          value: 10
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_ess_max_discharging_limit
+        data:
+          value: 0
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_grid_export_limitation
+        data:
+          value: 10
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_pcs_export_limitation
+        data:
+          value: 10
+
+  sigen_local_only:
+    alias: "Local Only"
+    icon: mdi:home-battery
+    sequence:
+      - service: select.select_option
+        target:
+          entity_id: select.sigen_plant_remote_ems_control_mode
+        data:
+          option: "Maximum Self Consumption"
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_ess_max_charging_limit
+        data:
+          value: 10
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_ess_max_discharging_limit
+        data:
+          value: 10
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_grid_export_limitation
+        data:
+          value: 10
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_pcs_export_limitation
+        data:
+          value: 10
+
+  sigen_no_export:
+    alias: "No Export"
+    icon: mdi:transmission-tower-off
+    sequence:
+      - service: select.select_option
+        target:
+          entity_id: select.sigen_plant_remote_ems_control_mode
+        data:
+          option: "Maximum Self Consumption"
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_ess_max_charging_limit
+        data:
+          value: 10
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_ess_max_discharging_limit
+        data:
+          value: 10
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_grid_export_limitation
+        data:
+          value: 0
+      - service: number.set_value
+        target:
+          entity_id: number.sigen_plant_pcs_export_limitation
+        data:
+          value: 10

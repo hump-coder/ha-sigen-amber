@@ -1,0 +1,58 @@
+title: Solar Control
+views:
+  - title: Control
+    path: control
+    icon: mdi:solar-power
+    cards:
+
+      - type: vertical-stack
+        cards:
+
+          - type: button
+            name: Export Solar
+            icon: mdi:solar-power
+            tap_action:
+              action: call-service
+              service: script.sigen_export_solar
+            hold_action:
+              action: none
+
+          - type: button
+            name: Local Only
+            icon: mdi:home-battery
+            tap_action:
+              action: call-service
+              service: script.sigen_local_only
+            hold_action:
+              action: none
+
+          - type: button
+            name: No Export
+            icon: mdi:transmission-tower-off
+            tap_action:
+              action: call-service
+              service: script.sigen_no_export
+            hold_action:
+              action: none
+
+      - type: entities
+        title: Current Sigenergy State
+        entities:
+          - entity: select.sigen_plant_remote_ems_control_mode
+            name: Mode
+          - entity: number.sigen_plant_grid_export_limitation
+            name: Grid Export Limit (kW)
+          - entity: number.sigen_plant_pcs_export_limitation
+            name: PCS Export Limit (kW)
+          - entity: number.sigen_plant_ess_max_discharging_limit
+            name: Discharge Limit (kW)
+          - entity: number.sigen_plant_ess_max_charging_limit
+            name: Charge Limit (kW)
+          - entity: switch.sigen_plant_remote_ems_controlled_by_home_assistant
+            name: Remote EMS (must be ON)
+          - entity: sensor.sigen_plant_battery_state_of_charge
+            name: Battery SOC
+          - entity: sensor.sigen_plant_pv_power
+            name: Solar Power
+          - entity: sensor.sigen_plant_grid_active_power
+            name: Grid Power (+ import)
