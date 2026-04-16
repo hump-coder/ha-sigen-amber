@@ -76,7 +76,7 @@ energy_controller:
   max_discharge_kw_entity:        input_number.energy_max_discharge_power
   battery_min_soc_entity:         input_number.energy_battery_min_soc
   export_min_soc_entity:          input_number.energy_export_min_soc
-  battery_capacity_kwh_entity:    input_number.energy_battery_capacity_kwh
+  battery_capacity_kwh_entity:    sensor.sigen_plant_rated_energy_capacity
   overnight_load_entity:          input_number.energy_overnight_standing_load
   battery_full_threshold_entity:  input_number.energy_battery_full_threshold
   cheap_threshold_entity:         input_number.energy_cheap_import_threshold
