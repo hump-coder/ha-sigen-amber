@@ -67,6 +67,7 @@ energy_controller:
   # Adjust if your sunrise/generation profile differs.
   morning_solar_start_hour: 7.5    # 07:30 – when meaningful generation begins
   morning_solar_end_hour:   11.0   # 11:00 – solar reliably cranking by here
+  morning_relax_start_hour: 22.0   # 22:00 – earliest hour to start relaxing the export floor
 
   # ── Configuration input_number entities (set via HA UI) ──────────────────
   expected_load_entity:           input_number.energy_expected_daily_house_load

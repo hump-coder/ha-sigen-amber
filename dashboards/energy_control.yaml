@@ -120,7 +120,9 @@ views:
           ---
           {% set now_h = now().hour + now().minute / 60 %}
           {% set morning_end = 11.0 %}
-          **Export SOC floor:** {% if eff < base %}**{{ eff | round(0) | int }}%** *(relaxed from {{ base | round(0) | int }}%, {{ (relax * 100) | round(0) | int }}% of max relaxation applied)*{% elif now_h >= morning_end %}**{{ base | round(0) | int }}%** *(post-morning window – normal rules)*{% else %}**{{ base | round(0) | int }}%** *(no relaxation – morning solar won't cover load)*{% endif %}
+          {% set relax_start = 22.0 %}
+          {% set in_window = now_h >= relax_start or now_h < morning_end %}
+          **Export SOC floor:** {% if eff < base %}**{{ eff | round(0) | int }}%** *(relaxed from {{ base | round(0) | int }}%, {{ (relax * 100) | round(0) | int }}% of max relaxation applied)*{% elif not in_window %}**{{ base | round(0) | int }}%** *(outside relaxation window – normal rules)*{% elif now_h >= morning_end %}**{{ base | round(0) | int }}%** *(post-morning – solar cranking)*{% else %}**{{ base | round(0) | int }}%** *(no relaxation – morning solar won't cover load)*{% endif %}
           **Battery now:** {{ soc | round(0) | int }}% → {% if can %}✅ above floor, **battery export allowed**{% else %}🔒 below floor, **holding battery reserve**{% endif %}
 
       # ── Daily Cost / Revenue ─────────────────────────────────

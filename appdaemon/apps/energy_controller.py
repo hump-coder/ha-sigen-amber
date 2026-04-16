@@ -855,13 +855,15 @@ class EnergyController(hass.Hass):
         if floor >= base:
             return base, f"export min SOC {base:.0f}% (floor = min SOC)"
 
-        morning_end = float(self.args.get("morning_solar_end_hour", 11.0))
-        now         = datetime.now().astimezone()
-        hour        = now.hour + now.minute / 60.0
+        morning_end  = float(self.args.get("morning_solar_end_hour",    11.0))
+        relax_start  = float(self.args.get("morning_relax_start_hour", 22.0))
+        now          = datetime.now().astimezone()
+        hour         = now.hour + now.minute / 60.0
 
-        # After morning window closes, solar is reliably cranking; normal rules take over.
-        if hour >= morning_end:
-            return base, f"export min SOC {base:.0f}% (post-morning)"
+        # Relaxation window spans midnight: relax_start (e.g. 22:00) → morning_end (e.g. 11:00).
+        # Outside that window solar is either generating (day) or the evening is too early to act.
+        if not (hour >= relax_start or hour < morning_end):
+            return base, f"export min SOC {base:.0f}% (outside relaxation window {relax_start:.0f}:00–{morning_end:.0f}:00)"
 
         m = self._morning_solar_stats(state)
         if m is None:
