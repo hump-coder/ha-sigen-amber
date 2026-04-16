@@ -22,7 +22,6 @@ input_number:
     min: 1
     max: 100
     step: 0.5
-    initial: 20
     unit_of_measurement: kWh
     icon: mdi:home-lightning-bolt
 
@@ -31,7 +30,6 @@ input_number:
     min: 0
     max: 28
     step: 0.5
-    initial: 10
     unit_of_measurement: kW
     icon: mdi:transmission-tower-export
 
@@ -40,7 +38,6 @@ input_number:
     min: 0
     max: 12
     step: 0.5
-    initial: 10
     unit_of_measurement: kW
     icon: mdi:battery-charging
 
@@ -49,25 +46,30 @@ input_number:
     min: 0
     max: 12
     step: 0.5
-    initial: 10
     unit_of_measurement: kW
     icon: mdi:battery-minus
 
   energy_battery_min_soc:
-    name: "Battery Minimum SOC (Charge Target)"
+    name: "Battery Minimum SOC (Cheap Charge Target)"
     min: 5
     max: 100
     step: 1
-    initial: 20
     unit_of_measurement: "%"
     icon: mdi:battery-low
+
+  energy_export_min_soc:
+    name: "Export Min SOC (Stop Grid Export Below)"
+    min: 5
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:battery-arrow-up
 
   energy_battery_full_threshold:
     name: "Battery Full Threshold"
     min: 50
     max: 100
     step: 1
-    initial: 95
     unit_of_measurement: "%"
     icon: mdi:battery
 
@@ -76,9 +78,90 @@ input_number:
     min: -50
     max: 50
     step: 0.5
-    initial: 10
     unit_of_measurement: "c/kWh"
     icon: mdi:tag-arrow-down
+
+  energy_min_export_price:
+    name: "Minimum Export Price (Enable Exports)"
+    min: -50
+    max: 100
+    step: 0.5
+    unit_of_measurement: "c/kWh"
+    icon: mdi:transmission-tower-export
+
+  # ── Daily cost / revenue accumulators (written by AppDaemon, persist across restarts) ──
+
+  energy_daily_import_cost:
+    name: "Daily Import Cost (Today)"
+    min: -9999
+    max: 9999
+    step: 0.0001
+    initial: 0
+    unit_of_measurement: "$"
+    icon: mdi:currency-usd
+
+  energy_daily_export_revenue:
+    name: "Daily Export Revenue (Today)"
+    min: -9999
+    max: 9999
+    step: 0.0001
+    initial: 0
+    unit_of_measurement: "$"
+    icon: mdi:currency-usd
+
+  energy_daily_import_kwh:
+    name: "Daily Import kWh (Today)"
+    min: 0
+    max: 9999
+    step: 0.001
+    initial: 0
+    unit_of_measurement: kWh
+    icon: mdi:transmission-tower
+
+  energy_daily_export_kwh:
+    name: "Daily Export kWh (Today)"
+    min: 0
+    max: 9999
+    step: 0.001
+    initial: 0
+    unit_of_measurement: kWh
+    icon: mdi:transmission-tower-export
+
+  energy_yesterday_import_cost:
+    name: "Daily Import Cost (Yesterday)"
+    min: -9999
+    max: 9999
+    step: 0.0001
+    initial: 0
+    unit_of_measurement: "$"
+    icon: mdi:currency-usd
+
+  energy_yesterday_export_revenue:
+    name: "Daily Export Revenue (Yesterday)"
+    min: -9999
+    max: 9999
+    step: 0.0001
+    initial: 0
+    unit_of_measurement: "$"
+    icon: mdi:currency-usd
+
+  energy_yesterday_import_kwh:
+    name: "Daily Import kWh (Yesterday)"
+    min: 0
+    max: 9999
+    step: 0.001
+    initial: 0
+    unit_of_measurement: kWh
+    icon: mdi:transmission-tower
+
+  energy_yesterday_export_kwh:
+    name: "Daily Export kWh (Yesterday)"
+    min: 0
+    max: 9999
+    step: 0.001
+    initial: 0
+    unit_of_measurement: kWh
+    icon: mdi:transmission-tower-export
 
 input_select:
 
@@ -87,7 +170,6 @@ input_select:
     options:
       - "Amber Electric"
       - "Amber Express"
-    initial: "Amber Electric"
     icon: mdi:lightning-bolt-circle
 
   energy_amber_forecast_source:
@@ -95,14 +177,12 @@ input_select:
     options:
       - "Amber Electric"
       - "Amber Express"
-    initial: "Amber Electric"
     icon: mdi:chart-timeline-variant
 
 input_boolean:
 
   energy_manual_override:
     name: "Energy Controller Manual Override"
-    initial: false
     icon: mdi:hand-back-right
 
 input_select:
@@ -117,7 +197,6 @@ input_select:
       - "No Export"
       - "Self Consume"
       - "Solar Priority"
-    initial: "Auto"
     icon: mdi:dip-switch
 
 # ── Template sensors ──────────────────────────────────────────────────────

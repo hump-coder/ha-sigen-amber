@@ -24,7 +24,7 @@ Dependencies:
 """
 
 import appdaemon.plugins.hass.hassapi as hass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 
 
@@ -100,9 +100,25 @@ class EnergyController(hass.Hass):
         self._last_mode: Mode | None = None
         self._consecutive_errors = 0
 
+        # Daily cost/revenue accumulators – restored from persistent input_number helpers
+        # so they survive AppDaemon restarts. Written back every control cycle.
+        # Clamp values that are at the helper minimum (-9999) — indicates never initialised.
+        def _restore(key: str) -> float:
+            v = self._get_float(self.args.get(key, ""), 0.0)
+            return 0.0 if abs(v) >= 9998 else v
+
+        self._daily_import_cost    = _restore("daily_import_cost_entity")
+        self._daily_export_revenue = _restore("daily_export_revenue_entity")
+        self._daily_import_kwh     = _restore("daily_import_kwh_entity")
+        self._daily_export_kwh     = _restore("daily_export_kwh_entity")
+        self._last_cost_ts: datetime | None = None
+
         # Schedule main control loop
         interval = int(self.args.get("interval", 60))
         self.run_every(self.control_loop, "now+5", interval)
+
+        # Reset accumulators at midnight each day
+        self.run_daily(self._reset_daily_costs, "00:00:01")
 
         # Also trigger immediately on price changes for fast response
         for key in ("live_import_price_entity", "live_export_price_entity",
@@ -170,8 +186,11 @@ class EnergyController(hass.Hass):
             self._consecutive_errors = 0
             mode, reason = self._determine_mode(state)
             self._apply_mode(mode, state)
+            self._update_daily_costs(state)
             self._publish_state(mode, reason)
             self._publish_today_plan(state)
+            self._publish_morning_soc_floor(state)
+            self._publish_daily_costs()
 
             if mode != self._last_mode:
                 self.log(f"★ Mode: {self._last_mode} → {mode.value} | {reason}")
@@ -213,8 +232,10 @@ class EnergyController(hass.Hass):
                 "max_charge_kw":        self._get_float(self.args["max_charge_kw_entity"], 10.0),
                 "max_discharge_kw":     self._get_float(self.args["max_discharge_kw_entity"], 10.0),
                 "battery_min_soc":      self._get_float(self.args["battery_min_soc_entity"], 20.0),
+                "export_min_soc":       self._get_float(self.args["export_min_soc_entity"], 20.0),
                 "battery_full_pct":     self._get_float(self.args["battery_full_threshold_entity"], 95.0),
                 "cheap_threshold_c":    self._get_float(self.args["cheap_threshold_entity"], 10.0),
+                "min_export_price_c":   self._get_float(self.args["min_export_price_entity"], 0.0),
                 "forecast_prices":      self._forecast_prices(),
                 "forecast_export_prices": self._forecast_export_prices(),
             }
@@ -281,10 +302,11 @@ class EnergyController(hass.Hass):
 
     def _determine_mode(self, state: dict) -> tuple[Mode, str]:
         """Apply priority rules to select operating mode."""
-        import_price   = state["import_price"]    # $/kWh
-        export_price   = state["export_price"]    # $/kWh
-        battery_soc    = state["battery_soc"]     # %
-        cheap_thresh   = state["cheap_threshold_c"] / 100.0  # → $/kWh
+        import_price      = state["import_price"]    # $/kWh
+        export_price      = state["export_price"]    # $/kWh
+        battery_soc       = state["battery_soc"]     # %
+        cheap_thresh      = state["cheap_threshold_c"] / 100.0   # → $/kWh
+        min_export_price  = state["min_export_price_c"] / 100.0  # → $/kWh
 
         # ── Priority 1: Negative import price → charge from grid ──────────
         if import_price < 0:
@@ -314,21 +336,28 @@ class EnergyController(hass.Hass):
                         f"< min, no cheaper window ahead – charging now at "
                         f"{import_price*100:.2f}c/kWh")
 
-        # ── Priority 3: Battery full + export price positive → max export ──
-        if battery_soc >= state["battery_full_pct"] and export_price > 0:
+        # ── Priority 3: Battery full + export price ≥ min → max export ────
+        if battery_soc >= state["battery_full_pct"] and export_price >= min_export_price:
             return (Mode.EXPORT_MAX,
                     f"Battery full ({battery_soc:.0f}% ≥ {state['battery_full_pct']:.0f}%) "
-                    f"and export price {export_price*100:.2f}c/kWh > 0 – maximising export")
+                    f"and export price {export_price*100:.2f}c/kWh ≥ "
+                    f"min {min_export_price*100:.2f}c/kWh – maximising export")
 
-        # ── Priority 4: Export price positive → self consume + export ──────
-        if export_price > 0:
+        # ── Priority 4: Export price ≥ min → self consume + export ─────────
+        if export_price >= min_export_price:
+            eff_min_soc, soc_reason = self._effective_export_min_soc(state)
+            if battery_soc > eff_min_soc:
+                action = "discharging battery + exporting"
+            else:
+                action = f"holding battery (SOC {battery_soc:.0f}% ≤ floor {eff_min_soc:.0f}%)"
             return (Mode.SELF_CONSUME,
-                    f"Export price {export_price*100:.2f}c/kWh > 0 "
-                    f"– self consuming with export enabled")
+                    f"Export price {export_price*100:.2f}c/kWh ≥ "
+                    f"min {min_export_price*100:.2f}c/kWh – {action} | {soc_reason}")
 
-        # ── Default: Export price ≤ 0 → no export ─────────────────────────
+        # ── Default: Export price below minimum → no export ────────────────
         return (Mode.NO_EXPORT,
-                f"Export price {export_price*100:.2f}c/kWh ≤ 0 "
+                f"Export price {export_price*100:.2f}c/kWh < "
+                f"min {min_export_price*100:.2f}c/kWh "
                 f"– curtailing all export, self consuming only")
 
     def _is_low_solar_day(self, state: dict) -> tuple[bool, str]:
@@ -390,82 +419,92 @@ class EnergyController(hass.Hass):
             self._set_sigen_mode(SIGEN_MODE_CHARGE_GRID)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(0.0)
-            self._set_export_limits(0.0)
+            self._set_export_limits(0.0, max_exp)
 
         elif mode == Mode.CHEAP_CHARGE:
             self._set_sigen_mode(SIGEN_MODE_CHARGE_GRID)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(0.0)
-            self._set_export_limits(0.0)
+            self._set_export_limits(0.0, max_exp)
 
         elif mode == Mode.HOLD_BATTERY:
             # Allow solar to charge battery but prevent discharge
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(0.0)
-            self._set_export_limits(max_exp if exp_pos else 0.0)
+            self._set_export_limits(max_exp if exp_pos else 0.0, max_exp)
 
         elif mode == Mode.EXPORT_MAX:
             # Actively discharge battery + export solar
             self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
             self._set_charge_limit(0.0)
             self._set_discharge_limit(max_dis)
-            self._set_export_limits(max_exp)
+            self._set_export_limits(max_exp, max_exp)
 
         elif mode == Mode.SELF_CONSUME:
-            self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
-            self._set_charge_limit(max_chg)
-            self._set_discharge_limit(max_dis)
-            self._set_export_limits(max_exp)
+            eff_min_soc, _ = self._effective_export_min_soc(state)
+            above_min_soc = state["battery_soc"] > eff_min_soc
+            if above_min_soc:
+                # Actively discharge battery: load covered first, remainder exported to grid
+                self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
+                self._set_charge_limit(0.0)
+                self._set_discharge_limit(max_dis)
+                self._set_export_limits(max_exp, max_exp)
+            else:
+                # Below export min SOC: cover load from solar/battery but no grid export
+                self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
+                self._set_charge_limit(max_chg)
+                self._set_discharge_limit(max_dis)
+                self._set_export_limits(0.0, max_exp)
 
         elif mode == Mode.NO_EXPORT:
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(max_dis)
-            self._set_export_limits(0.0)
+            self._set_export_limits(0.0, max_exp)
 
         elif mode == Mode.MAN_EXPORT_BATTERY:
             # Actively discharge battery to grid at full rate
             self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
             self._set_charge_limit(0.0)
             self._set_discharge_limit(max_dis)
-            self._set_export_limits(max_exp)
+            self._set_export_limits(max_exp, max_exp)
 
         elif mode == Mode.MAN_STOP_BATT_EXP:
             # Solar can still export but battery must not discharge to grid
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(0.0)
-            self._set_export_limits(max_exp if exp_pos else 0.0)
+            self._set_export_limits(max_exp if exp_pos else 0.0, max_exp)
 
         elif mode == Mode.MAN_CHARGE_GRID:
             # Force charge from grid at max rate
             self._set_sigen_mode(SIGEN_MODE_CHARGE_GRID)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(0.0)
-            self._set_export_limits(0.0)
+            self._set_export_limits(0.0, max_exp)
 
         elif mode == Mode.MAN_NO_EXPORT:
             # No grid export at all – self consume only
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(max_dis)
-            self._set_export_limits(0.0)
+            self._set_export_limits(0.0, max_exp)
 
         elif mode == Mode.MAN_SELF_CONSUME:
             # Normal self consume with export allowed
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(max_dis)
-            self._set_export_limits(max_exp)
+            self._set_export_limits(max_exp, max_exp)
 
         elif mode == Mode.MAN_SOLAR_PRIORITY:
-            # ESS First discharge: battery actively covers load to avoid grid import
-            # Solar can still charge battery when surplus; no export to grid
-            self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
+            # Maximum Self Consumption: solar → load → battery, no export.
+            # Battery discharges only when solar is insufficient.
+            self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(max_dis)
-            self._set_export_limits(0.0)
+            self._set_export_limits(0.0, max_exp)
 
         # MANUAL (hands-off) and ERROR modes: do nothing, don't touch hardware
 
@@ -484,12 +523,15 @@ class EnergyController(hass.Hass):
         self.call_service("select/select_option",
                           entity_id=entity, option=option)
 
-    def _set_export_limits(self, kw: float):
-        """Set both grid-point and PCS export limits."""
-        self._set_number(self.args.get("grid_export_limit_entity", ""), kw, "grid export limit")
+    def _set_export_limits(self, grid_kw: float, pcs_kw: float):
+        """Set grid-point and PCS export limits.
+        grid_kw controls whether power reaches the grid.
+        pcs_kw should always be max_exp – setting PCS to 0 curtails all solar
+        including generation used for local load, not just grid export."""
+        self._set_number(self.args.get("grid_export_limit_entity", ""), grid_kw, "grid export limit")
         pcs = self.args.get("pcs_export_limit_entity", "")
         if pcs:
-            self._set_number(pcs, kw, "PCS export limit")
+            self._set_number(pcs, pcs_kw, "PCS export limit")
 
     def _set_charge_limit(self, kw: float):
         self._set_number(self.args.get("charge_limit_entity", ""), kw, "charge limit")
@@ -620,6 +662,261 @@ class EnergyController(hass.Hass):
                            "surplus_kwh": round(surplus, 2),
                            "is_low_solar_day": is_low_solar,
                        })
+
+    def _publish_morning_soc_floor(self, state: dict):
+        """Publish the dynamic morning export SOC floor as a virtual sensor."""
+        eff_min_soc, _ = self._effective_export_min_soc(state)   # uses cached stats
+        m              = self._morning_solar_stats(state)         # uses cached stats
+        can_export     = state["battery_soc"] > eff_min_soc
+
+        morning_start = float(self.args.get("morning_solar_start_hour", 7.5))
+        morning_end   = float(self.args.get("morning_solar_end_hour",   11.0))
+        start_hhmm    = f"{int(morning_start):02d}:{int((morning_start % 1) * 60):02d}"
+        end_hhmm      = f"{int(morning_end):02d}:{int((morning_end % 1) * 60):02d}"
+
+        self.set_state(
+            "sensor.energy_morning_soc_floor",
+            state=f"{eff_min_soc:.0f}%",
+            attributes={
+                "friendly_name":               "Morning Export SOC Floor",
+                "effective_min_soc":           round(eff_min_soc, 1),
+                "base_min_soc":                state["export_min_soc"],
+                "relax_factor":                round(m["relax_factor"], 2)      if m else 0.0,
+                "morning_solar_kwh":           round(m["morning_solar_kwh"], 2) if m else 0.0,
+                "morning_solar_effective_kwh": round(m["effective_solar"], 2)   if m else 0.0,
+                "morning_load_kwh":            round(m["morning_load_kwh"], 2)  if m else 0.0,
+                "surplus_kwh":                 round(m["surplus"], 2)           if m else 0.0,
+                "can_export":                  can_export,
+                "window_start":                start_hhmm,
+                "window_end":                  end_hhmm,
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Daily cost / revenue tracking
+    # ------------------------------------------------------------------
+
+    def _reset_daily_costs(self, kwargs=None):
+        """Called at midnight: copy today's totals to yesterday helpers, then zero today."""
+        self.log("Rolling daily cost/revenue: today → yesterday, resetting today")
+        pairs = [
+            ("daily_import_cost_entity",    "yesterday_import_cost_entity",    self._daily_import_cost),
+            ("daily_export_revenue_entity", "yesterday_export_revenue_entity", self._daily_export_revenue),
+            ("daily_import_kwh_entity",     "yesterday_import_kwh_entity",     self._daily_import_kwh),
+            ("daily_export_kwh_entity",     "yesterday_export_kwh_entity",     self._daily_export_kwh),
+        ]
+        for today_key, yesterday_key, value in pairs:
+            y_entity = self.args.get(yesterday_key)
+            if y_entity:
+                self.call_service("input_number/set_value",
+                                  entity_id=y_entity, value=round(value, 4))
+            t_entity = self.args.get(today_key)
+            if t_entity:
+                self.call_service("input_number/set_value",
+                                  entity_id=t_entity, value=0)
+
+        self._daily_import_cost = 0.0
+        self._daily_export_revenue = 0.0
+        self._daily_import_kwh = 0.0
+        self._daily_export_kwh = 0.0
+        self._last_cost_ts = None
+
+    def _update_daily_costs(self, state: dict):
+        """Integrate grid power × price over the elapsed interval."""
+        now = datetime.now(timezone.utc)
+        if self._last_cost_ts is None:
+            self._last_cost_ts = now
+            return
+
+        elapsed_h = (now - self._last_cost_ts).total_seconds() / 3600.0
+        # Cap at 5 minutes to avoid inflating costs after a restart gap
+        elapsed_h = min(elapsed_h, 5 / 60.0)
+        self._last_cost_ts = now
+
+        grid_kw = state["grid_power_kw"]   # + = import, – = export
+        if grid_kw > 0:
+            kwh = grid_kw * elapsed_h
+            self._daily_import_kwh += kwh
+            self._daily_import_cost += kwh * state["import_price"]
+        elif grid_kw < 0:
+            kwh = abs(grid_kw) * elapsed_h
+            self._daily_export_kwh += kwh
+            self._daily_export_revenue += kwh * state["export_price"]
+
+    def _publish_daily_costs(self):
+        """Persist accumulators to input_number helpers and publish virtual sensors."""
+        net = self._daily_import_cost - self._daily_export_revenue
+
+        # Persist to HA input_number helpers (survive AppDaemon restarts)
+        persist = [
+            ("daily_import_cost_entity",    self._daily_import_cost),
+            ("daily_export_revenue_entity", self._daily_export_revenue),
+            ("daily_import_kwh_entity",     self._daily_import_kwh),
+            ("daily_export_kwh_entity",     self._daily_export_kwh),
+        ]
+        for key, value in persist:
+            entity = self.args.get(key)
+            if entity:
+                self.call_service("input_number/set_value",
+                                  entity_id=entity, value=round(value, 4))
+
+        # Virtual sensors (for dashboard display and history graphs)
+        self.set_state(
+            "sensor.energy_daily_import_cost",
+            state=round(self._daily_import_cost, 4),
+            attributes={
+                "friendly_name": "Daily Import Cost",
+                "unit_of_measurement": "$",
+                "device_class": "monetary",
+                "import_kwh": round(self._daily_import_kwh, 3),
+            },
+        )
+        self.set_state(
+            "sensor.energy_daily_export_revenue",
+            state=round(self._daily_export_revenue, 4),
+            attributes={
+                "friendly_name": "Daily Export Revenue",
+                "unit_of_measurement": "$",
+                "device_class": "monetary",
+                "export_kwh": round(self._daily_export_kwh, 3),
+            },
+        )
+        self.set_state(
+            "sensor.energy_daily_net_cost",
+            state=round(net, 4),
+            attributes={
+                "friendly_name": "Daily Net Cost",
+                "unit_of_measurement": "$",
+                "device_class": "monetary",
+                "import_cost": round(self._daily_import_cost, 4),
+                "export_revenue": round(self._daily_export_revenue, 4),
+                "import_kwh": round(self._daily_import_kwh, 3),
+                "export_kwh": round(self._daily_export_kwh, 3),
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Dynamic export SOC floor
+    # ------------------------------------------------------------------
+
+    def _morning_solar_stats(self, state: dict) -> dict | None:
+        """
+        Compute morning window solar/load stats, cached in the state dict so
+        Solcast is read and parsed only once per control cycle regardless of
+        how many callers need this data.
+
+        Returns a dict of intermediate values, or None if Solcast data is
+        unavailable or expected_load is unconfigured.
+        """
+        if "_morning_stats" in state:
+            return state["_morning_stats"]
+
+        morning_start     = float(self.args.get("morning_solar_start_hour", 7.5))
+        morning_end       = float(self.args.get("morning_solar_end_hour",   11.0))
+        morning_solar_kwh = self._solcast_window_kwh(morning_start, morning_end)
+        morning_load_kwh  = state["expected_load_kwh"] * (morning_end - morning_start) / 24.0
+
+        if morning_solar_kwh is None or morning_load_kwh <= 0:
+            state["_morning_stats"] = None
+            return None
+
+        effective_solar = morning_solar_kwh * 0.85
+        surplus         = effective_solar - morning_load_kwh
+        relax_factor    = max(0.0, min(1.0, surplus / morning_load_kwh)) if surplus > 0 else 0.0
+
+        result = {
+            "morning_start":     morning_start,
+            "morning_end":       morning_end,
+            "morning_solar_kwh": morning_solar_kwh,
+            "effective_solar":   effective_solar,
+            "morning_load_kwh":  morning_load_kwh,
+            "surplus":           surplus,
+            "relax_factor":      relax_factor,
+        }
+        state["_morning_stats"] = result
+        return result
+
+    def _effective_export_min_soc(self, state: dict) -> tuple[float, str]:
+        """
+        Return the effective battery SOC floor for grid export.
+
+        Outside the morning window the configured export_min_soc is returned
+        unchanged.  Within the morning window (default 07:30–11:00) the floor
+        is relaxed toward battery_min_soc in proportion to how much the
+        Solcast morning-window solar forecast exceeds the morning load.
+
+        The logic: if morning solar comfortably covers morning load we can
+        afford to let the battery run lower during the price spike, because
+        the subsequent solar will replenish it without needing to import.
+        """
+        base  = state["export_min_soc"]
+        floor = state["battery_min_soc"]
+
+        if floor >= base:
+            return base, f"export min SOC {base:.0f}% (floor = min SOC)"
+
+        morning_end = float(self.args.get("morning_solar_end_hour", 11.0))
+        now         = datetime.now().astimezone()
+        hour        = now.hour + now.minute / 60.0
+
+        # After morning window closes, solar is reliably cranking; normal rules take over.
+        if hour >= morning_end:
+            return base, f"export min SOC {base:.0f}% (post-morning)"
+
+        m = self._morning_solar_stats(state)
+        if m is None:
+            return base, f"export min SOC {base:.0f}% (no Solcast data or load unconfigured)"
+
+        if m["surplus"] <= 0:
+            return base, (
+                f"export min SOC {base:.0f}% – morning solar "
+                f"{m['effective_solar']:.1f} kWh ≤ load {m['morning_load_kwh']:.1f} kWh, "
+                f"no relaxation"
+            )
+
+        effective_min = round(base - m["relax_factor"] * (base - floor), 1)
+        return effective_min, (
+            f"export min SOC {effective_min:.0f}% (base {base:.0f}% → "
+            f"floor {floor:.0f}% | morning solar {m['effective_solar']:.1f} kWh, "
+            f"load {m['morning_load_kwh']:.1f} kWh, surplus {m['surplus']:.1f} kWh, "
+            f"relax {m['relax_factor']:.0%})"
+        )
+
+    def _solcast_window_kwh(self, start_hour: float, end_hour: float) -> float | None:
+        """
+        Sum Solcast forecast kWh for a local-time window (e.g. 7.5 → 11.0).
+
+        Tries the 'detailedForecast' attribute first (older BJReplay builds),
+        then 'forecasts' (newer builds).  Each interval is assumed to be
+        30 minutes; kWh = pv_estimate_kw × 0.5.
+        """
+        entity = self.args.get("solcast_today_entity", "")
+        if not entity:
+            return None
+
+        intervals = self.get_state(entity, attribute="detailedForecast")
+        if not isinstance(intervals, list):
+            intervals = self.get_state(entity, attribute="forecasts")
+        if not isinstance(intervals, list):
+            return None
+
+        total_kwh = 0.0
+        for interval in intervals:
+            try:
+                start_raw = (interval.get("period_start")
+                             or interval.get("start_time", ""))
+                if not start_raw:
+                    continue
+                dt = datetime.fromisoformat(start_raw).astimezone()
+                h  = dt.hour + dt.minute / 60.0
+                if start_hour <= h < end_hour:
+                    kw = float(interval.get("pv_estimate",
+                               interval.get("per_kwh", 0)))
+                    total_kwh += kw * 0.5   # 30-min period → kWh
+            except (ValueError, TypeError, KeyError):
+                continue
+
+        return total_kwh
 
     # ------------------------------------------------------------------
     # Helpers

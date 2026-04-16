@@ -25,7 +25,7 @@ energy_controller:
   # Positive grid_power_entity = importing, negative = exporting.
   battery_soc_entity:       sensor.sigen_plant_battery_state_of_charge
   battery_power_entity:     sensor.sigen_plant_battery_power
-  pv_power_entity:          sensor.sigen_plant_sigen_pv_power
+  pv_power_entity:          sensor.sigen_plant_pv_power
   grid_power_entity:        sensor.sigen_plant_grid_active_power
   load_power_entity:        sensor.sigen_plant_total_load_power
 
@@ -63,15 +63,32 @@ energy_controller:
   solcast_today_entity:     sensor.solcast_pv_forecast_forecast_today
   solcast_remaining_entity: sensor.solcast_pv_forecast_forecast_remaining_today
 
+  # Morning solar window used for dynamic export SOC floor calculation.
+  # Adjust if your sunrise/generation profile differs.
+  morning_solar_start_hour: 7.5    # 07:30 – when meaningful generation begins
+  morning_solar_end_hour:   11.0   # 11:00 – solar reliably cranking by here
+
   # ── Configuration input_number entities (set via HA UI) ──────────────────
   expected_load_entity:           input_number.energy_expected_daily_house_load
   max_export_kw_entity:           input_number.energy_max_export_power
   max_charge_kw_entity:           input_number.energy_max_charge_power
   max_discharge_kw_entity:        input_number.energy_max_discharge_power
   battery_min_soc_entity:         input_number.energy_battery_min_soc
+  export_min_soc_entity:          input_number.energy_export_min_soc
   battery_full_threshold_entity:  input_number.energy_battery_full_threshold
   cheap_threshold_entity:         input_number.energy_cheap_import_threshold
+  min_export_price_entity:        input_number.energy_min_export_price
 
   # ── Manual override ────────────────────────────────────────────────────────
   manual_override_entity: input_boolean.energy_manual_override
   manual_mode_entity:     input_select.energy_manual_mode
+
+  # ── Daily cost / revenue persistent helpers ───────────────────────────────
+  daily_import_cost_entity:        input_number.energy_daily_import_cost
+  daily_export_revenue_entity:     input_number.energy_daily_export_revenue
+  daily_import_kwh_entity:         input_number.energy_daily_import_kwh
+  daily_export_kwh_entity:         input_number.energy_daily_export_kwh
+  yesterday_import_cost_entity:    input_number.energy_yesterday_import_cost
+  yesterday_export_revenue_entity: input_number.energy_yesterday_export_revenue
+  yesterday_import_kwh_entity:     input_number.energy_yesterday_import_kwh
+  yesterday_export_kwh_entity:     input_number.energy_yesterday_export_kwh

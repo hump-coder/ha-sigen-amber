@@ -60,7 +60,7 @@ views:
       - type: entities
         title: Live Power Flow
         entities:
-          - entity: sensor.sigen_plant_sigen_pv_power
+          - entity: sensor.sigen_plant_pv_power
             name: Solar Generation
             icon: mdi:solar-power
           - entity: sensor.sigen_plant_total_load_power
@@ -94,6 +94,57 @@ views:
           Solar may not cover load – controller will seek cheap import windows
           {% endif %}
 
+      # ── Morning Export Floor ────────────────────────────────
+      - type: markdown
+        content: >
+          {% set ws   = state_attr('sensor.energy_morning_soc_floor', 'window_start') | default('07:30') %}
+          {% set we   = state_attr('sensor.energy_morning_soc_floor', 'window_end')   | default('11:00') %}
+          {% set sol  = state_attr('sensor.energy_morning_soc_floor', 'morning_solar_kwh') | float(0) %}
+          {% set esol = state_attr('sensor.energy_morning_soc_floor', 'morning_solar_effective_kwh') | float(0) %}
+          {% set load = state_attr('sensor.energy_morning_soc_floor', 'morning_load_kwh') | float(0) %}
+          {% set surp = state_attr('sensor.energy_morning_soc_floor', 'surplus_kwh') | float(0) %}
+          {% set eff  = state_attr('sensor.energy_morning_soc_floor', 'effective_min_soc') | float(0) %}
+          {% set base = state_attr('sensor.energy_morning_soc_floor', 'base_min_soc') | float(0) %}
+          {% set relax = state_attr('sensor.energy_morning_soc_floor', 'relax_factor') | float(0) %}
+          {% set soc  = states('sensor.sigen_plant_battery_state_of_charge') | float(0) %}
+          {% set can  = state_attr('sensor.energy_morning_soc_floor', 'can_export') %}
+          ## 🌅 Morning Window Export ({{ ws }}–{{ we }})
+          **Solcast forecast:** {{ sol | round(1) }} kWh → {{ esol | round(1) }} kWh after 15% margin
+          **Morning load est.:** {{ load | round(1) }} kWh
+          {% if surp > 0 %}
+          ☀️ **Surplus {{ surp | round(1) }} kWh** – solar will cover morning load and recharge battery
+          {% else %}
+          ⚠️ **Deficit {{ (surp | abs) | round(1) }} kWh** – morning solar won't cover load, protecting battery
+          {% endif %}
+
+          ---
+          **Export SOC floor:** {% if eff < base %}**{{ eff | round(0) | int }}%** *(relaxed from {{ base | round(0) | int }}%, {{ (relax * 100) | round(0) | int }}% of max relaxation applied)*{% else %}**{{ base | round(0) | int }}%** *(no relaxation – insufficient morning solar)*{% endif %}
+          **Battery now:** {{ soc | round(0) | int }}% → {% if can %}✅ above floor, **battery export allowed**{% else %}🔒 below floor, **holding battery reserve**{% endif %}
+
+      # ── Daily Cost / Revenue ─────────────────────────────────
+      - type: markdown
+        content: |
+          {% set imp     = states('sensor.energy_daily_import_cost') | float(0) %}
+          {% set exp     = states('sensor.energy_daily_export_revenue') | float(0) %}
+          {% set net     = states('sensor.energy_daily_net_cost') | float(0) %}
+          {% set imp_kwh = state_attr('sensor.energy_daily_import_cost', 'import_kwh') | float(0) %}
+          {% set exp_kwh = state_attr('sensor.energy_daily_export_revenue', 'export_kwh') | float(0) %}
+          {% set y_imp     = states('input_number.energy_yesterday_import_cost') | float(0) %}
+          {% set y_exp     = states('input_number.energy_yesterday_export_revenue') | float(0) %}
+          {% set y_net     = y_imp - y_exp %}
+          {% set y_imp_kwh = states('input_number.energy_yesterday_import_kwh') | float(0) %}
+          {% set y_exp_kwh = states('input_number.energy_yesterday_export_kwh') | float(0) %}
+          ## 💰 Today's Cost & Revenue
+          ⚡ Imported: **{{ imp_kwh | round(2) }} kWh** — cost **${{ imp | round(2) }}**
+          📤 Exported: **{{ exp_kwh | round(2) }} kWh** — earned **${{ exp | round(2) }}**
+          {% if net <= 0 %}✅ **Net profit: ${{ (net | abs) | round(2) }}**{% else %}💸 **Net cost: ${{ net | round(2) }}**{% endif %}
+
+          ---
+          ## 📅 Yesterday
+          ⚡ Imported: **{{ y_imp_kwh | round(2) }} kWh** — cost **${{ y_imp | round(2) }}**
+          📤 Exported: **{{ y_exp_kwh | round(2) }} kWh** — earned **${{ y_exp | round(2) }}**
+          {% if y_net <= 0 %}✅ **Net profit: ${{ (y_net | abs) | round(2) }}**{% else %}💸 **Net cost: ${{ y_net | round(2) }}**{% endif %}
+
       # ── Today's Action Plan ──────────────────────────────────
       - type: markdown
         title: Today's Price & Action Plan
@@ -115,7 +166,7 @@ views:
         title: Power Flow History
         hours_to_show: 12
         entities:
-          - entity: sensor.sigen_plant_sigen_pv_power
+          - entity: sensor.sigen_plant_pv_power
             name: Solar
           - entity: sensor.sigen_plant_total_load_power
             name: Load
@@ -192,6 +243,8 @@ views:
         entities:
           - entity: input_number.energy_battery_min_soc
             name: Minimum SOC (cheap charge target)
+          - entity: input_number.energy_export_min_soc
+            name: Export Min SOC (stop grid export below)
           - entity: input_number.energy_battery_full_threshold
             name: "Full Threshold (triggers Max Export)"
 
@@ -201,12 +254,25 @@ views:
         entities:
           - entity: input_number.energy_cheap_import_threshold
             name: Cheap Import Threshold
+          - entity: input_number.energy_min_export_price
+            name: Minimum Export Price
 
       - type: markdown
         content: >
+          **Minimum SOC (cheap charge target)**: On low-solar days, the controller will
+          seek cheap import windows to charge the battery back to this level.
+
+          **Export Min SOC**: In Self Consume mode, grid export is suppressed once battery
+          SOC falls to or below this level. The battery continues to discharge for house
+          load — only grid export stops. Set higher to preserve an overnight reserve.
+
           **Cheap Import**: If import price ≤ this value **and** solar won't cover load,
           the controller will charge the battery to the Minimum SOC level.
           Prices below **0c** always trigger Force Charge regardless of this setting.
+
+          **Minimum Export Price**: Export (Self Consume / Max Export) is only enabled
+          when the feed-in price is at or above this value. Default **0c** preserves
+          the existing behaviour.
 
       # ── Controller Status ────────────────────────────────────
       - type: entities
