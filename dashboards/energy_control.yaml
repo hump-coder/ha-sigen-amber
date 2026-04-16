@@ -270,7 +270,7 @@ views:
           **Battery Capacity**: Read directly from the inverter (sensor.sigen_plant_rated_energy_capacity).
           Used to convert kWh energy requirements into SOC%.
 
-**Minimum SOC (cheap charge target)**: On low-solar days, the controller will
+          **Minimum SOC (cheap charge target)**: On low-solar days, the controller will
           seek cheap import windows to charge the battery back to this level.
 
           **Export Min SOC**: The maximum overnight reserve — used when solar forecast is
