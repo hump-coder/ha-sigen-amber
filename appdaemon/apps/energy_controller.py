@@ -6,12 +6,13 @@ and forecast pricing to maximise self-consumption, minimise costs, and
 maximise export revenue.
 
 Control logic priority (highest → lowest):
-  1. FORCE_CHARGE   – Import price < 0: charge from grid, curtail export
-  2. CHEAP_CHARGE   – Low solar day, battery < min SOC, price ≤ cheap threshold
-  3. HOLD_BATTERY   – Low solar day, battery < min SOC, cheaper window ahead
-  4. EXPORT_MAX     – Battery ≥ full threshold AND export price > 0
-  5. SELF_CONSUME   – Export price > 0: solar→load→battery→export
-  6. NO_EXPORT      – Export price ≤ 0: solar→load→battery, no grid export
+  1. FORCE_CHARGE         – Import price < 0: charge from grid, curtail export
+  2. CHEAP_CHARGE         – Low solar day, battery < min SOC, price ≤ cheap threshold
+  3. HOLD_BATTERY         – Low solar day, battery < min SOC, cheaper window ahead
+  4. EXPORT_MAX           – Battery ≥ full threshold AND export price ≥ min_export_price: discharge battery + export
+  4.5 SOLAR_EXPORT_SPIKE  – Spike toggle ON AND export price ≥ spike threshold: export solar, suspend battery charge
+  5. SELF_CONSUME         – Export price > 0: solar→load→export; battery discharged only if price ≥ min_export_price
+  6. NO_EXPORT            – Export price ≤ 0: solar→load→battery, no grid export
 
 All configuration values are read live from HA input_* helpers so changes
 in the UI take effect at the next control cycle (~60 s) without restarting.
@@ -47,6 +48,7 @@ class Mode(str, Enum):
     MAN_SELF_CONSUME    = "Manual: Self Consume"         # Normal self-consume + export
     MAN_SOLAR_PRIORITY  = "Manual: Solar Priority"       # Solar+battery cover load, no import/export
     MANUAL              = "Manual Override"              # Hands-off (legacy boolean)
+    SOLAR_EXPORT_SPIKE  = "Solar Export on Spike"        # Auto: export solar (not charge battery) when price ≥ threshold
     ERROR               = "Error"                        # Sensor data unavailable
 
 
@@ -82,6 +84,7 @@ MODE_ICONS = {
     Mode.MAN_NO_EXPORT:      "🔧 MANUAL: NO EXPORT",
     Mode.MAN_SELF_CONSUME:   "🔧 MANUAL: SELF CONSUME",
     Mode.MAN_SOLAR_PRIORITY: "🔧 MANUAL: SOLAR PRIORITY",
+    Mode.SOLAR_EXPORT_SPIKE: "📤 SOLAR EXPORT ON SPIKE",
     Mode.NO_EXPORT:     "🏠 SELF CONSUME ONLY",
     Mode.MANUAL:        "🔧 MANUAL OVERRIDE",
     Mode.ERROR:         "❌ ERROR – CHECK SENSORS",
@@ -118,7 +121,7 @@ class EnergyController(hass.Hass):
         self.run_every(self.control_loop, "now+5", interval)
 
         # Reset accumulators at midnight each day
-        self.run_daily(self._reset_daily_costs, "00:00:01")
+        self.run_daily(self._reset_daily_costs, "23:59:00")
 
         # Also trigger immediately on price changes for fast response
         for key in ("live_import_price_entity", "live_export_price_entity",
@@ -156,6 +159,13 @@ class EnergyController(hass.Hass):
     def control_loop(self, kwargs):
         """Evaluate state and apply optimal operating mode."""
         try:
+            # Always read state and track costs first, regardless of operating mode.
+            # Cost/revenue accumulation must run even in manual modes.
+            state = self._read_state()
+            if state is not None:
+                self._update_daily_costs(state)
+                self._publish_daily_costs()
+
             # Manual override (boolean hands-off switch)
             if self._manual_override_active():
                 self._publish_state(Mode.MANUAL, "Manual override is enabled – controller is hands off")
@@ -165,7 +175,6 @@ class EnergyController(hass.Hass):
             # Named manual mode buttons
             manual_mode = self._manual_mode_select()
             if manual_mode is not None:
-                state = self._read_state()
                 if state:
                     self._apply_mode(manual_mode, state)
                 self._publish_state(manual_mode,
@@ -176,7 +185,6 @@ class EnergyController(hass.Hass):
                     self._last_mode = manual_mode
                 return
 
-            state = self._read_state()
             if state is None:
                 self._consecutive_errors += 1
                 self._publish_state(Mode.ERROR,
@@ -186,11 +194,9 @@ class EnergyController(hass.Hass):
             self._consecutive_errors = 0
             mode, reason = self._determine_mode(state)
             self._apply_mode(mode, state)
-            self._update_daily_costs(state)
             self._publish_state(mode, reason)
             self._publish_today_plan(state)
             self._publish_morning_soc_floor(state)
-            self._publish_daily_costs()
 
             if mode != self._last_mode:
                 self.log(f"★ Mode: {self._last_mode} → {mode.value} | {reason}")
@@ -238,6 +244,10 @@ class EnergyController(hass.Hass):
                 "battery_full_pct":       self._get_float(self.args["battery_full_threshold_entity"], 95.0),
                 "cheap_threshold_c":    self._get_float(self.args["cheap_threshold_entity"], 10.0),
                 "min_export_price_c":   self._get_float(self.args["min_export_price_entity"], 0.0),
+                "solar_export_spike_enabled": self.get_state(
+                    self.args.get("solar_export_spike_enabled_entity", "")) == "on",
+                "solar_export_spike_threshold_c": self._get_float(
+                    self.args.get("solar_export_spike_threshold_entity", ""), 20.0),
                 "forecast_prices":      self._forecast_prices(),
                 "forecast_export_prices": self._forecast_export_prices(),
             }
@@ -259,44 +269,70 @@ class EnergyController(hass.Hass):
         if self._live_source() == "Amber Express":
             entity = self.args.get("amber_express_import_entity",
                                    self.args.get("live_import_price_entity", ""))
-        else:
-            entity = self.args.get("live_import_price_entity", "")
+            raw = self._get_float(entity)
+            return round(raw, 2) if raw is not None else None
+        entity = self.args.get("live_import_price_entity", "")
         return self._get_float(entity)
 
     def _current_export_price(self) -> float | None:
         if self._live_source() == "Amber Express":
             entity = self.args.get("amber_express_export_entity",
                                    self.args.get("live_export_price_entity", ""))
-        else:
-            entity = self.args.get("live_export_price_entity", "")
+            raw = self._get_float(entity)
+            return round(raw, 2) if raw is not None else None
+        entity = self.args.get("live_export_price_entity", "")
         return self._get_float(entity)
 
     def _forecast_prices(self) -> list[dict]:
         """Return import price forecast list from the configured source."""
         if self._forecast_source() == "Amber Express":
-            entity = self.args.get("amber_express_forecast_import_entity",
-                                   self.args.get("forecast_import_entity", ""))
-        else:
-            entity = self.args.get("forecast_import_entity", "")
+            entity = self.args.get("amber_express_import_entity", "")
+            return self._round_express_forecast(self._get_forecast_attribute(entity, attr="forecast"))
+        entity = self.args.get("forecast_import_entity", "")
         return self._get_forecast_attribute(entity)
 
     def _forecast_export_prices(self) -> list[dict]:
         """Return export (feed-in) price forecast list from configured source."""
         if self._forecast_source() == "Amber Express":
-            entity = self.args.get("amber_express_forecast_export_entity",
-                                   self.args.get("forecast_export_entity", ""))
-        else:
-            entity = self.args.get("forecast_export_entity", "")
+            entity = self.args.get("amber_express_export_entity", "")
+            return self._round_express_forecast(self._get_forecast_attribute(entity, attr="forecast"))
+        entity = self.args.get("forecast_export_entity", "")
         return self._get_forecast_attribute(entity)
 
-    def _get_forecast_attribute(self, entity: str) -> list[dict]:
-        """Extract the 'forecasts' attribute from an Amber forecast sensor."""
+    @staticmethod
+    def _round_express_forecast(intervals: list[dict]) -> list[dict]:
+        """Round Amber Express forecast 'value' fields to nearest cent (2dp in $/kWh)."""
+        result = []
+        for item in intervals:
+            if "value" in item:
+                item = {**item, "value": round(float(item["value"]), 2)}
+            result.append(item)
+        return result
+
+    def _get_forecast_attribute(self, entity: str, attr: str = "forecasts") -> list[dict]:
+        """Extract a forecast list attribute from an Amber price sensor."""
         if not entity:
             return []
-        raw = self.get_state(entity, attribute="forecasts")
-        if isinstance(raw, list):
-            return raw
-        return []
+        raw = self.get_state(entity, attribute=attr)
+        if not isinstance(raw, list):
+            self.log(f"Forecast attribute '{attr}' on {entity} returned {type(raw).__name__}: {raw!r}", level="WARNING")
+            return []
+        if raw:
+            self.log(f"Forecast sample from {entity}[{attr}]: {raw[0]}", level="DEBUG")
+        return raw
+
+    @staticmethod
+    def _forecast_start_time(interval: dict) -> str:
+        """Return the start-time string from a forecast interval, handling field name variants."""
+        return interval.get("start_time") or interval.get("time") or interval.get("nem_time") or ""
+
+    @staticmethod
+    def _forecast_per_kwh(interval: dict) -> float:
+        """Return the $/kWh price from a forecast interval, handling field name variants."""
+        for key in ("per_kwh", "value", "price", "cost"):
+            if key in interval:
+                return float(interval[key])
+        return 0.0
 
     # ------------------------------------------------------------------
     # Mode determination
@@ -313,7 +349,7 @@ class EnergyController(hass.Hass):
         # ── Priority 1: Negative import price → charge from grid ──────────
         if import_price < 0:
             return (Mode.FORCE_CHARGE,
-                    f"Import price is negative ({import_price*100:.2f}c/kWh) "
+                    f"Import price is negative ({import_price*100:.0f}c/kWh) "
                     f"– charging battery from grid, curtailing export")
 
         # ── Priority 2: Low solar day + battery below minimum SOC ─────────
@@ -323,7 +359,7 @@ class EnergyController(hass.Hass):
                 return (Mode.CHEAP_CHARGE,
                         f"Low solar day ({solar_reason}), battery {battery_soc:.0f}% "
                         f"< min {state['battery_min_soc']:.0f}%, price "
-                        f"{import_price*100:.2f}c ≤ threshold {cheap_thresh*100:.0f}c")
+                        f"{import_price*100:.0f}c ≤ threshold {cheap_thresh*100:.0f}c")
 
             # Not cheap right now – is there a cheaper window coming?
             next_cheap = self._next_cheap_window(state["forecast_prices"], cheap_thresh)
@@ -336,30 +372,41 @@ class EnergyController(hass.Hass):
                 return (Mode.CHEAP_CHARGE,
                         f"Low solar day ({solar_reason}), battery {battery_soc:.0f}% "
                         f"< min, no cheaper window ahead – charging now at "
-                        f"{import_price*100:.2f}c/kWh")
+                        f"{import_price*100:.0f}c/kWh")
 
         # ── Priority 3: Battery full + export price ≥ min → max export ────
         if battery_soc >= state["battery_full_pct"] and export_price >= min_export_price:
             return (Mode.EXPORT_MAX,
                     f"Battery full ({battery_soc:.0f}% ≥ {state['battery_full_pct']:.0f}%) "
-                    f"and export price {export_price*100:.2f}c/kWh ≥ "
-                    f"min {min_export_price*100:.2f}c/kWh – maximising export")
+                    f"and export price {export_price*100:.0f}c/kWh ≥ "
+                    f"min {min_export_price*100:.0f}c/kWh – maximising export")
 
-        # ── Priority 4: Export price ≥ min → self consume + export ─────────
-        if export_price >= min_export_price:
+        # ── Priority 4: Solar export on spike ─────────────────────────────────
+        # When the toggle is enabled and export price hits the threshold, stop
+        # charging the battery and redirect excess solar to the grid instead.
+        if state["solar_export_spike_enabled"]:
+            spike_thresh = state["solar_export_spike_threshold_c"] / 100.0
+            if export_price >= spike_thresh:
+                return (Mode.SOLAR_EXPORT_SPIKE,
+                        f"Solar export spike active: export price {export_price*100:.0f}c/kWh ≥ "
+                        f"threshold {spike_thresh*100:.0f}c/kWh – exporting solar, suspending battery charge")
+
+        # ── Priority 5: Export price > 0 → export solar; discharge battery only if price ≥ min ──
+        if export_price > 0:
             eff_min_soc, soc_reason = self._effective_export_min_soc(state)
-            if battery_soc > eff_min_soc:
+            if battery_soc > eff_min_soc and export_price >= min_export_price:
                 action = "discharging battery + exporting"
+            elif battery_soc > eff_min_soc:
+                action = (f"exporting solar, holding battery "
+                          f"(price {export_price*100:.0f}c < min {min_export_price*100:.0f}c for discharge)")
             else:
-                action = f"holding battery (SOC {battery_soc:.0f}% ≤ floor {eff_min_soc:.0f}%)"
+                action = f"exporting solar, holding battery (SOC {battery_soc:.0f}% ≤ floor {eff_min_soc:.0f}%)"
             return (Mode.SELF_CONSUME,
-                    f"Export price {export_price*100:.2f}c/kWh ≥ "
-                    f"min {min_export_price*100:.2f}c/kWh – {action} | {soc_reason}")
+                    f"Export price {export_price*100:.0f}c/kWh > 0 – {action} | {soc_reason}")
 
-        # ── Default: Export price below minimum → no export ────────────────
+        # ── Default: Export price ≤ 0 → no export ──────────────────────────
         return (Mode.NO_EXPORT,
-                f"Export price {export_price*100:.2f}c/kWh < "
-                f"min {min_export_price*100:.2f}c/kWh "
+                f"Export price {export_price*100:.0f}c/kWh ≤ 0 "
                 f"– curtailing all export, self consuming only")
 
     def _is_low_solar_day(self, state: dict) -> tuple[bool, str]:
@@ -391,13 +438,13 @@ class EnergyController(hass.Hass):
         now = datetime.now(timezone.utc)
         for interval in forecasts:
             try:
-                start_raw = interval.get("start_time", "")
+                start_raw = self._forecast_start_time(interval)
                 if not start_raw:
                     continue
                 start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
                 if start <= now:
                     continue
-                price = float(interval.get("per_kwh", 9999))
+                price = self._forecast_per_kwh(interval)
                 if price <= threshold:
                     # Format in local time
                     local_start = start.astimezone()
@@ -446,18 +493,19 @@ class EnergyController(hass.Hass):
         elif mode == Mode.SELF_CONSUME:
             eff_min_soc, _ = self._effective_export_min_soc(state)
             above_min_soc = state["battery_soc"] > eff_min_soc
-            if above_min_soc:
+            price_ok_for_discharge = state["export_price"] >= state["min_export_price_c"] / 100.0
+            if above_min_soc and price_ok_for_discharge:
                 # Actively discharge battery: load covered first, remainder exported to grid
                 self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
                 self._set_charge_limit(0.0)
                 self._set_discharge_limit(max_dis)
                 self._set_export_limits(max_exp, max_exp)
             else:
-                # Below export min SOC: cover load from solar/battery but no grid export
+                # Hold battery; export_price > 0 guaranteed by _determine_mode so always open solar export
                 self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
                 self._set_charge_limit(max_chg)
                 self._set_discharge_limit(max_dis)
-                self._set_export_limits(0.0, max_exp)
+                self._set_export_limits(max_exp, max_exp)
 
         elif mode == Mode.NO_EXPORT:
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
@@ -497,6 +545,13 @@ class EnergyController(hass.Hass):
             # Normal self consume with export allowed
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
+            self._set_discharge_limit(max_dis)
+            self._set_export_limits(max_exp, max_exp)
+
+        elif mode == Mode.SOLAR_EXPORT_SPIKE:
+            # Export solar to grid, suspend battery charging
+            self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
+            self._set_charge_limit(0.0)
             self._set_discharge_limit(max_dis)
             self._set_export_limits(max_exp, max_exp)
 
@@ -589,9 +644,9 @@ class EnergyController(hass.Hass):
         # Build lookup: start_time → export price
         export_by_start: dict[str, float] = {}
         for ef in export_fc:
-            key = ef.get("start_time", "")
+            key = self._forecast_start_time(ef)
             if key:
-                export_by_start[key] = float(ef.get("per_kwh", 0))
+                export_by_start[key] = self._forecast_per_kwh(ef)
 
         now_utc = datetime.now(timezone.utc)
         plan_rows: list[dict] = []
@@ -603,14 +658,14 @@ class EnergyController(hass.Hass):
 
         for interval in forecasts[:24]:  # Show max 24 hours
             try:
-                start_raw = interval.get("start_time", "")
+                start_raw = self._forecast_start_time(interval)
                 if not start_raw:
                     continue
                 start_dt = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
                 if start_dt < now_utc - __import__("datetime").timedelta(minutes=30):
                     continue  # Skip past intervals
 
-                import_p = float(interval.get("per_kwh", 0))
+                import_p = self._forecast_per_kwh(interval)
                 export_p = export_by_start.get(start_raw, 0.0)
                 local_t  = start_dt.astimezone().strftime("%H:%M")
 
@@ -636,8 +691,8 @@ class EnergyController(hass.Hass):
                     "colour":   colour,
                 })
                 markdown_rows.append(
-                    f"| {local_t} | {import_p*100:+.1f}c | "
-                    f"{export_p*100:+.1f}c | {action} |"
+                    f"| {local_t} | {import_p*100:+.0f}c | "
+                    f"{export_p*100:+.0f}c | {action} |"
                 )
             except (ValueError, TypeError, KeyError):
                 continue

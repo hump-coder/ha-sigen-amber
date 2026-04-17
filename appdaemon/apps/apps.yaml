@@ -49,10 +49,8 @@ energy_controller:
   # Only needed if you have Amber Express installed.
   # Adjust entity IDs to match your Amber Express installation.
   # Leave blank ("") to disable.
-  amber_express_import_entity:          sensor.the_hump_express_general_price
-  amber_express_export_entity:          sensor.the_hump_express_feed_in_price
-  amber_express_forecast_import_entity: sensor.the_hump_express_general_forecast
-  amber_express_forecast_export_entity: sensor.the_hump_express_feed_in_forecast
+  amber_express_import_entity: sensor.amber_express_home_general_price
+  amber_express_export_entity: sensor.amber_express_home_feed_in_price
 
   # ── Source selection (read from HA input_select helpers) ─────────────────
   # Values should match the options in the input_select defined in the package YAML.
@@ -81,6 +79,8 @@ energy_controller:
   battery_full_threshold_entity:  input_number.energy_battery_full_threshold
   cheap_threshold_entity:         input_number.energy_cheap_import_threshold
   min_export_price_entity:        input_number.energy_min_export_price
+  solar_export_spike_enabled_entity:    input_boolean.energy_solar_export_spike_enabled
+  solar_export_spike_threshold_entity:  input_number.energy_solar_export_spike_threshold
 
   # ── Manual override ────────────────────────────────────────────────────────
   manual_override_entity: input_boolean.energy_manual_override

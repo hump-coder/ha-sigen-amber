@@ -6,7 +6,472 @@ views:
   # ══════════════════════════════════════════════════════════════
   - title: Overview
     path: overview
+    type: sections
+    max_columns: 3
     icon: mdi:solar-power
+    badges: []
+    sections:
+
+      # ── Section 1: Energy Flow + Power Flow History ───────────
+      - cards:
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: input_boolean.energy_power_flow_visual
+                state: "on"
+            card:
+              type: custom:sigenergy-house-card
+              battery_positive_charging: true
+              entities:
+                solar_power: sensor.sigen_plant_pv_power
+                load_power: sensor.sigen_plant_total_load_power
+                battery_power: sensor.sigen_plant_battery_power
+                battery_soc: sensor.sigen_plant_battery_state_of_charge
+                grid_active: sensor.sigen_plant_grid_active_power
+                battery_capacity: sensor.sigen_plant_rated_energy_capacity
+                battery_min_soc: input_number.energy_battery_min_soc
+                sun: sun.sun
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: input_boolean.energy_power_flow_visual
+                state: "off"
+            card:
+              type: entities
+              title: Live Power Flow
+              entities:
+                - entity: sensor.sigen_plant_pv_power
+                  name: Solar Generation
+                  icon: mdi:solar-power
+                - entity: sensor.sigen_plant_total_load_power
+                  name: House Load
+                  icon: mdi:home-lightning-bolt
+                - entity: sensor.sigen_plant_battery_power
+                  name: Battery Power (+ charge / − discharge)
+                  icon: mdi:battery-charging
+                - entity: sensor.sigen_plant_grid_active_power
+                  name: Grid Power (+ import / − export)
+                  icon: mdi:transmission-tower
+                - entity: sensor.sigen_plant_battery_state_of_charge
+                  name: Battery SOC
+                  icon: mdi:battery
+          - type: history-graph
+            title: Power Flow History
+            hours_to_show: 12
+            entities:
+              - entity: sensor.sigen_plant_pv_power
+                name: Solar
+              - entity: sensor.sigen_plant_total_load_power
+                name: Load
+              - entity: sensor.sigen_plant_battery_power
+                name: Battery
+              - entity: sensor.sigen_plant_grid_active_power
+                name: Grid
+
+      # ── Section 2: Live Prices + Battery SOC + Buttons ────────
+      - cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: sensor.energy_import_price_cents
+                name: Import Price
+                icon: mdi:transmission-tower-import
+                show_state: true
+                show_label: true
+                show_units: false
+                label: |
+                  [[[
+                    const v = Number(entity.state);
+                    if (isNaN(v)) return 'Unavailable';
+                    if (v < 0) return 'Getting paid to import';
+                    if (v <= 20) return 'Cheap import';
+                    if (v <= 40) return 'Moderate import';
+                    return 'Expensive import';
+                  ]]]
+                tap_action:
+                  action: more-info
+                hold_action:
+                  action: more-info
+                styles:
+                  card:
+                    - padding: 16px
+                    - border-radius: 18px
+                    - font-size: 16px
+                  grid:
+                    - grid-template-areas: "\"i n\" \"i s\" \"l l\""
+                    - grid-template-columns: 56px 1fr
+                    - grid-template-rows: min-content min-content min-content
+                  icon:
+                    - width: 34px
+                  name:
+                    - justify-self: start
+                    - font-weight: 700
+                    - font-size: 15px
+                  state:
+                    - justify-self: start
+                    - font-weight: 800
+                    - font-size: 28px
+                  label:
+                    - justify-self: start
+                    - opacity: 0.85
+                    - font-size: 13px
+                state:
+                  - operator: template
+                    value: |
+                      [[[
+                        return Number(entity.state) < 0;
+                      ]]]
+                    styles:
+                      card:
+                        - background: rgba(76, 175, 80, 0.18)
+                      icon:
+                        - color: rgb(76, 175, 80)
+                      state:
+                        - color: rgb(76, 175, 80)
+                  - operator: template
+                    value: |
+                      [[[
+                        const v = Number(entity.state);
+                        return v >= 0 && v <= 20;
+                      ]]]
+                    styles:
+                      card:
+                        - background: rgba(139, 195, 74, 0.18)
+                      icon:
+                        - color: rgb(139, 195, 74)
+                      state:
+                        - color: rgb(139, 195, 74)
+                  - operator: template
+                    value: |
+                      [[[
+                        const v = Number(entity.state);
+                        return v > 20 && v <= 40;
+                      ]]]
+                    styles:
+                      card:
+                        - background: rgba(255, 193, 7, 0.18)
+                      icon:
+                        - color: rgb(255, 193, 7)
+                      state:
+                        - color: rgb(255, 193, 7)
+                  - operator: template
+                    value: |
+                      [[[
+                        return Number(entity.state) > 40;
+                      ]]]
+                    styles:
+                      card:
+                        - background: rgba(244, 67, 54, 0.18)
+                      icon:
+                        - color: rgb(244, 67, 54)
+                      state:
+                        - color: rgb(244, 67, 54)
+                  - operator: default
+                    styles:
+                      card:
+                        - background: rgba(120, 120, 120, 0.12)
+                      icon:
+                        - color: var(--primary-text-color)
+                      state:
+                        - color: var(--primary-text-color)
+              - type: custom:button-card
+                entity: sensor.energy_export_price_cents
+                name: Export Price
+                icon: mdi:transmission-tower-export
+                show_state: true
+                show_label: true
+                show_units: false
+                label: |
+                  [[[
+                    const v = Number(entity.state);
+                    if (isNaN(v)) return 'Unavailable';
+                    return v > 0 ? 'Exporting profitably'
+                      : v < 0 ? 'Paying to export'
+                      : 'Neutral';
+                  ]]]
+                tap_action:
+                  action: more-info
+                hold_action:
+                  action: more-info
+                styles:
+                  card:
+                    - padding: 16px
+                    - border-radius: 18px
+                    - font-size: 16px
+                  grid:
+                    - grid-template-areas: "\"i n\" \"i s\" \"l l\""
+                    - grid-template-columns: 56px 1fr
+                    - grid-template-rows: min-content min-content min-content
+                  icon:
+                    - width: 34px
+                  name:
+                    - justify-self: start
+                    - font-weight: 700
+                    - font-size: 15px
+                  state:
+                    - justify-self: start
+                    - font-weight: 800
+                    - font-size: 28px
+                  label:
+                    - justify-self: start
+                    - opacity: 0.85
+                    - font-size: 13px
+                state:
+                  - operator: template
+                    value: |
+                      [[[
+                        return Number(entity.state) < 0;
+                      ]]]
+                    styles:
+                      card:
+                        - background: rgba(244, 67, 54, 0.18)
+                      icon:
+                        - color: rgb(244, 67, 54)
+                      state:
+                        - color: rgb(244, 67, 54)
+                  - operator: template
+                    value: |
+                      [[[
+                        return Number(entity.state) > 0;
+                      ]]]
+                    styles:
+                      card:
+                        - background: rgba(76, 175, 80, 0.18)
+                      icon:
+                        - color: rgb(76, 175, 80)
+                      state:
+                        - color: rgb(76, 175, 80)
+                  - operator: default
+                    styles:
+                      card:
+                        - background: rgba(120, 120, 120, 0.12)
+                      icon:
+                        - color: var(--primary-text-color)
+                      state:
+                        - color: var(--primary-text-color)
+          - type: vertical-stack
+            cards:
+              - type: gauge
+                entity: sensor.sigen_plant_battery_state_of_charge
+                name: Battery Charge
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity:
+                  green: 50
+                  yellow: 20
+                  red: 0
+              - type: markdown
+                content: "## Battery charge: {{ [(states('sensor.sigen_plant_battery_state_of_charge')|float(0) / 100 * states('sensor.sigen_plant_rated_energy_capacity')|float(0))|round(1), 0]|max }}kWh"
+          - !include energy_override_buttons.yaml
+
+      # ── Section 3: Solar Forecast + Cost & Revenue ────────────
+      - cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Solar forecast
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              chart:
+                height: 300px
+              tooltip:
+                enabled: true
+                shared: true
+                followCursor: true
+            graph_span: 12h
+            span:
+              start: day
+              offset: +6h
+            show:
+              loading: false
+            yaxis:
+              - id: capacity
+                show: true
+                opposite: true
+                decimals: 0
+                max: 100
+                min: 0
+                apex_config:
+                  tickAmount: 10
+              - id: kWh
+                show: true
+                min: 0
+                apex_config:
+                  tickAmount: 10
+              - id: header_only
+                show: false
+            series:
+              - entity: sensor.sigen_plant_pv_power
+                name: Solar Power (now)
+                type: line
+                stroke_width: 2
+                float_precision: 2
+                color: Orange
+                yaxis_id: kWh
+                unit: kW
+                extend_to: now
+                show:
+                  legend_value: true
+                  in_header: false
+                group_by:
+                  func: avg
+                  duration: 5m
+              - entity: sensor.solcast_pv_forecast_forecast_today
+                name: Expected
+                color: Grey
+                opacity: 0.3
+                stroke_width: 0
+                type: area
+                time_delta: +15min
+                extend_to: false
+                yaxis_id: kWh
+                show:
+                  legend_value: false
+                  in_header: false
+                data_generator: |
+                  return entity.attributes.detailedForecast.map((entry) => {
+                        return [new Date(entry.period_start), entry.pv_estimate];
+                      });
+              - entity: sensor.solcast_pv_forecast_forecast_today
+                name: Pessimistic
+                color: Grey
+                opacity: 0.3
+                stroke_width: 0
+                type: area
+                time_delta: +15min
+                extend_to: false
+                yaxis_id: kWh
+                show:
+                  legend_value: false
+                  in_header: false
+                data_generator: |
+                  return entity.attributes.detailedForecast.map((entry) => {
+                        return [new Date(entry.period_start), entry.pv_estimate10];
+                      });
+              - entity: sensor.sigen_plant_daily_pv_energy
+                yaxis_id: header_only
+                name: Today Actual
+                stroke_width: 2
+                color: Orange
+                show:
+                  legend_value: true
+                  in_header: true
+                  in_chart: false
+              - entity: sensor.solcast_pv_forecast_forecast_today
+                yaxis_id: header_only
+                name: Expected
+                color: Grey
+                show:
+                  legend_value: true
+                  in_header: true
+                  in_chart: false
+              - entity: sensor.solcast_pv_forecast_forecast_today
+                attribute: estimate10
+                yaxis_id: header_only
+                name: Pessimistic
+                color: Grey
+                opacity: 0.3
+                show:
+                  legend_value: true
+                  in_header: true
+                  in_chart: false
+              - entity: sensor.solcast_pv_forecast_forecast_remaining_today
+                yaxis_id: header_only
+                name: Remaining
+                color: Grey
+                show:
+                  legend_value: true
+                  in_header: true
+                  in_chart: false
+          - type: custom:apexcharts-card
+            header:
+              show: true
+              title: Amber Price Forecast
+            graph_span: 20h
+            span:
+              start: minute
+            yaxis:
+              - decimals: 2
+                apex_config:
+                  tickAmount: 8
+            apex_config:
+              legend:
+                show: true
+              xaxis:
+                type: datetime
+                min: |
+                  return Date.now()
+                max: |
+                  return Date.now() + 20 * 60 * 60 * 1000
+            series:
+              - entity: sensor.amber_express_home_general_price
+                name: Import
+                type: line
+                unit: " "
+                stroke_width: 2
+                curve: stepline
+                float_precision: 2
+                show:
+                  legend_value: false
+                data_generator: |
+                  return (entity.attributes.forecast || [])
+                    .map(x => [new Date(x.time).getTime(), Number(x.value)])
+                    .filter(x =>
+                      !isNaN(x[0]) &&
+                      !isNaN(x[1]) &&
+                      x[0] >= Date.now() &&
+                      x[0] <= Date.now() + 20 * 60 * 60 * 1000
+                    );
+              - entity: sensor.amber_express_home_feed_in_price
+                name: Export
+                type: line
+                unit: " "
+                stroke_width: 2
+                curve: stepline
+                float_precision: 2
+                show:
+                  legend_value: false
+                data_generator: |
+                  return (entity.attributes.forecast || [])
+                    .map(x => [new Date(x.time).getTime(), Number(x.value)])
+                    .filter(x =>
+                      !isNaN(x[0]) &&
+                      !isNaN(x[1]) &&
+                      x[0] >= Date.now() &&
+                      x[0] <= Date.now() + 20 * 60 * 60 * 1000
+                    );
+          - type: markdown
+            content: |
+              {% set imp     = states('input_number.energy_daily_import_cost') | float(0) %}
+              {% set exp     = states('input_number.energy_daily_export_revenue') | float(0) %}
+              {% set imp_kwh = states('input_number.energy_daily_import_kwh') | float(0) %}
+              {% set exp_kwh = states('input_number.energy_daily_export_kwh') | float(0) %}
+              {% set net     = imp - exp %}
+              {% set y_imp     = states('input_number.energy_yesterday_import_cost') | float(0) %}
+              {% set y_exp     = states('input_number.energy_yesterday_export_revenue') | float(0) %}
+              {% set y_net     = y_imp - y_exp %}
+              {% set y_imp_kwh = states('input_number.energy_yesterday_import_kwh') | float(0) %}
+              {% set y_exp_kwh = states('input_number.energy_yesterday_export_kwh') | float(0) %}
+              ## 💰 Today's Cost & Revenue
+              ⚡ Imported: **{{ imp_kwh | round(2) }} kWh** — cost **${{ imp | round(2) }}**
+              📤 Exported: **{{ exp_kwh | round(2) }} kWh** — earned **${{ exp | round(2) }}**
+              {% if net <= 0 %}✅ **Net profit: ${{ (net | abs) | round(2) }}**{% else %}💸 **Net cost: ${{ net | round(2) }}**{% endif %}
+
+              ---
+              ## 📅 Yesterday
+              ⚡ Imported: **{{ y_imp_kwh | round(2) }} kWh** — cost **${{ y_imp | round(2) }}**
+              📤 Exported: **{{ y_exp_kwh | round(2) }} kWh** — earned **${{ y_exp | round(2) }}**
+              {% if y_net <= 0 %}✅ **Net profit: ${{ (y_net | abs) | round(2) }}**{% else %}💸 **Net cost: ${{ y_net | round(2) }}**{% endif %}
+
+  # ══════════════════════════════════════════════════════════════
+  - title: Info
+    path: info
+    icon: mdi:information-outline
     badges: []
     cards:
 
@@ -27,54 +492,6 @@ views:
           {% set icon = icons.get(mode, '❓') %}
           ## {{ icon }} {{ mode }}
           {{ states('sensor.energy_controller_reason') }}
-
-      # ── Override Buttons (reusable – include in any dashboard) ──
-      - !include energy_override_buttons.yaml
-
-      # ── Live Prices Row ──────────────────────────────────────
-      - type: horizontal-stack
-        cards:
-          - type: entity
-            entity: sensor.energy_import_price_cents
-            name: Import Price
-            icon: mdi:transmission-tower
-          - type: entity
-            entity: sensor.energy_export_price_cents
-            name: Export Price
-            icon: mdi:transmission-tower-export
-
-      # ── Battery SOC Gauge ────────────────────────────────────
-      - type: gauge
-        entity: sensor.sigen_plant_battery_state_of_charge
-        name: Battery State of Charge
-        unit: "%"
-        min: 0
-        max: 100
-        needle: true
-        severity:
-          green: 50
-          yellow: 20
-          red: 0
-
-      # ── Live Power Flow ───────────────────────────────────────
-      - type: entities
-        title: Live Power Flow
-        entities:
-          - entity: sensor.sigen_plant_pv_power
-            name: Solar Generation
-            icon: mdi:solar-power
-          - entity: sensor.sigen_plant_total_load_power
-            name: House Load
-            icon: mdi:home-lightning-bolt
-          - entity: sensor.sigen_plant_battery_power
-            name: Battery Power (+ charge / − discharge)
-            icon: mdi:battery-charging
-          - entity: sensor.sigen_plant_grid_active_power
-            name: Grid Power (+ import / − export)
-            icon: mdi:transmission-tower
-          - entity: sensor.sigen_plant_battery_state_of_charge
-            name: Battery SOC
-            icon: mdi:battery
 
       # ── Solar vs Load Today ──────────────────────────────────
       - type: markdown
@@ -125,30 +542,6 @@ views:
           **Export SOC floor:** {% if eff < base %}**{{ eff | round(0) | int }}%** *(relaxed from {{ base | round(0) | int }}%, {{ (relax * 100) | round(0) | int }}% of max relaxation applied)*{% elif not in_window %}**{{ base | round(0) | int }}%** *(outside relaxation window – normal rules)*{% elif now_h >= morning_end %}**{{ base | round(0) | int }}%** *(post-morning – solar cranking)*{% else %}**{{ base | round(0) | int }}%** *(no relaxation – morning solar won't cover load)*{% endif %}
           **Battery now:** {{ soc | round(0) | int }}% → {% if can %}✅ above floor, **battery export allowed**{% else %}🔒 below floor, **holding battery reserve**{% endif %}
 
-      # ── Daily Cost / Revenue ─────────────────────────────────
-      - type: markdown
-        content: |
-          {% set imp     = states('sensor.energy_daily_import_cost') | float(0) %}
-          {% set exp     = states('sensor.energy_daily_export_revenue') | float(0) %}
-          {% set net     = states('sensor.energy_daily_net_cost') | float(0) %}
-          {% set imp_kwh = state_attr('sensor.energy_daily_import_cost', 'import_kwh') | float(0) %}
-          {% set exp_kwh = state_attr('sensor.energy_daily_export_revenue', 'export_kwh') | float(0) %}
-          {% set y_imp     = states('input_number.energy_yesterday_import_cost') | float(0) %}
-          {% set y_exp     = states('input_number.energy_yesterday_export_revenue') | float(0) %}
-          {% set y_net     = y_imp - y_exp %}
-          {% set y_imp_kwh = states('input_number.energy_yesterday_import_kwh') | float(0) %}
-          {% set y_exp_kwh = states('input_number.energy_yesterday_export_kwh') | float(0) %}
-          ## 💰 Today's Cost & Revenue
-          ⚡ Imported: **{{ imp_kwh | round(2) }} kWh** — cost **${{ imp | round(2) }}**
-          📤 Exported: **{{ exp_kwh | round(2) }} kWh** — earned **${{ exp | round(2) }}**
-          {% if net <= 0 %}✅ **Net profit: ${{ (net | abs) | round(2) }}**{% else %}💸 **Net cost: ${{ net | round(2) }}**{% endif %}
-
-          ---
-          ## 📅 Yesterday
-          ⚡ Imported: **{{ y_imp_kwh | round(2) }} kWh** — cost **${{ y_imp | round(2) }}**
-          📤 Exported: **{{ y_exp_kwh | round(2) }} kWh** — earned **${{ y_exp | round(2) }}**
-          {% if y_net <= 0 %}✅ **Net profit: ${{ (y_net | abs) | round(2) }}**{% else %}💸 **Net cost: ${{ y_net | round(2) }}**{% endif %}
-
       # ── Today's Action Plan ──────────────────────────────────
       - type: markdown
         title: Today's Price & Action Plan
@@ -164,20 +557,6 @@ views:
             name: Import
           - entity: sensor.the_hump_feed_in_price
             name: Export (Feed-in)
-
-      # ── Power History Graph ──────────────────────────────────
-      - type: history-graph
-        title: Power Flow History
-        hours_to_show: 12
-        entities:
-          - entity: sensor.sigen_plant_pv_power
-            name: Solar
-          - entity: sensor.sigen_plant_total_load_power
-            name: Load
-          - entity: sensor.sigen_plant_battery_power
-            name: Battery
-          - entity: sensor.sigen_plant_grid_active_power
-            name: Grid
 
       # ── Mode Change History ──────────────────────────────────
       - type: history-graph
@@ -195,6 +574,14 @@ views:
 
       # ── Override Buttons (same as Overview tab) ─────────────
       - !include energy_override_buttons.yaml
+
+      # ── Dashboard Display ────────────────────────────────────
+      - type: entities
+        title: Dashboard Display
+        entities:
+          - entity: input_boolean.energy_power_flow_visual
+            name: Graphical Power Flow (animated house view)
+            icon: mdi:home-lightning-bolt-outline
 
       # ── Hands-off Override ───────────────────────────────────
       - type: entities
@@ -264,6 +651,10 @@ views:
             name: Cheap Import Threshold
           - entity: input_number.energy_min_export_price
             name: Minimum Export Price
+          - entity: input_boolean.energy_solar_export_spike_enabled
+            name: Solar Export on Spike (enable)
+          - entity: input_number.energy_solar_export_spike_threshold
+            name: Solar Export Spike Threshold
 
       - type: markdown
         content: >

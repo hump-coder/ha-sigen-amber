@@ -108,3 +108,27 @@ cards:
           data:
             entity_id: input_select.energy_manual_mode
             option: "Solar Priority"
+
+  - type: horizontal-stack
+    cards:
+      - type: button
+        name: "Solar Export on Spike"
+        icon: mdi:transmission-tower-export
+        show_state: false
+        tap_action:
+          action: call-service
+          service: input_boolean.toggle
+          data:
+            entity_id: input_boolean.energy_solar_export_spike_enabled
+        card_mod:
+          style: |
+            ha-card {
+              {% if is_state('input_boolean.energy_solar_export_spike_enabled', 'on') %}
+              border: 2px solid var(--warning-color);
+              {% endif %}
+            }
+
+      - type: markdown
+        content: >
+          **Spike threshold:** {{ states('input_number.energy_solar_export_spike_threshold') | int }}c/kWh
+          * *

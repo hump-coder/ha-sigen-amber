@@ -36,7 +36,7 @@ input_number:
   energy_max_charge_power:
     name: "Maximum Charge Power"
     min: 0
-    max: 12
+    max: 24
     step: 0.5
     unit_of_measurement: kW
     icon: mdi:battery-charging
@@ -44,7 +44,7 @@ input_number:
   energy_max_discharge_power:
     name: "Maximum Discharge Power"
     min: 0
-    max: 12
+    max: 10
     step: 0.5
     unit_of_measurement: kW
     icon: mdi:battery-minus
@@ -69,7 +69,7 @@ input_number:
     name: "Overnight Standing Load"
     min: 0
     max: 10
-    step: 0.1
+    step: 0.5
     unit_of_measurement: kW
     icon: mdi:home-clock
 
@@ -83,17 +83,26 @@ input_number:
 
   energy_cheap_import_threshold:
     name: "Cheap Import Price Threshold"
-    min: -50
+    min: 0
     max: 50
-    step: 0.5
+    step: 1
     unit_of_measurement: "c/kWh"
     icon: mdi:tag-arrow-down
 
   energy_min_export_price:
     name: "Minimum Export Price (Enable Exports)"
-    min: -50
+    min: 0
     max: 100
-    step: 0.5
+    step: 1
+    unit_of_measurement: "c/kWh"
+    icon: mdi:transmission-tower-export
+
+  energy_solar_export_spike_threshold:
+    name: "Solar Export Spike Threshold"
+    min: 0
+    max: 200
+    step: 1
+    initial: 20
     unit_of_measurement: "c/kWh"
     icon: mdi:transmission-tower-export
 
@@ -187,14 +196,6 @@ input_select:
       - "Amber Express"
     icon: mdi:chart-timeline-variant
 
-input_boolean:
-
-  energy_manual_override:
-    name: "Energy Controller Manual Override"
-    icon: mdi:hand-back-right
-
-input_select:
-
   energy_manual_mode:
     name: "Manual Mode Override"
     options:
@@ -206,6 +207,20 @@ input_select:
       - "Self Consume"
       - "Solar Priority"
     icon: mdi:dip-switch
+
+input_boolean:
+
+  energy_manual_override:
+    name: "Energy Controller Manual Override"
+    icon: mdi:hand-back-right
+
+  energy_solar_export_spike_enabled:
+    name: "Solar Export on Spike"
+    icon: mdi:transmission-tower-export
+
+  energy_power_flow_visual:
+    name: "Power Flow: Graphical View"
+    icon: mdi:home-lightning-bolt-outline
 
 # ── Template sensors ──────────────────────────────────────────────────────
 
@@ -220,11 +235,12 @@ template:
         state: >
           {% set src = states('input_select.energy_amber_live_source') %}
           {% if src == 'Amber Express' %}
-            {% set raw = states('sensor.the_hump_express_general_price') | float(0) %}
+            {% set raw = states('sensor.amber_express_home_general_price') | float(0) %}
+            {{ (raw * 100) | round(0) | int }}
           {% else %}
             {% set raw = states('sensor.the_hump_general_price') | float(0) %}
+            {{ (raw * 100) | round(2) }}
           {% endif %}
-          {{ (raw * 100) | round(2) }}
         attributes:
           source: "{{ states('input_select.energy_amber_live_source') }}"
 
@@ -236,11 +252,12 @@ template:
         state: >
           {% set src = states('input_select.energy_amber_live_source') %}
           {% if src == 'Amber Express' %}
-            {% set raw = states('sensor.the_hump_express_feed_in_price') | float(0) %}
+            {% set raw = states('sensor.amber_express_home_feed_in_price') | float(0) %}
+            {{ (raw * 100) | round(0) | int }}
           {% else %}
             {% set raw = states('sensor.the_hump_feed_in_price') | float(0) %}
+            {{ (raw * 100) | round(2) }}
           {% endif %}
-          {{ (raw * 100) | round(2) }}
         attributes:
           source: "{{ states('input_select.energy_amber_live_source') }}"
 
