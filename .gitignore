@@ -1,4 +1,5 @@
 secrets.yaml
+DEPLOY.md
 .storage/
 *.log
 __pycache__/
