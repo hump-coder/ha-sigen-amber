@@ -484,8 +484,8 @@ class EnergyController(hass.Hass):
             self._set_export_limits(max_exp if exp_pos else 0.0, max_exp)
 
         elif mode == Mode.EXPORT_MAX:
-            # Actively discharge battery + export solar
-            self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
+            # Export solar first; battery fills remaining export capacity
+            self._set_sigen_mode(SIGEN_MODE_DISCHARGE_PV)
             self._set_charge_limit(0.0)
             self._set_discharge_limit(max_dis)
             self._set_export_limits(max_exp, max_exp)
@@ -495,8 +495,8 @@ class EnergyController(hass.Hass):
             above_min_soc = state["battery_soc"] > eff_min_soc
             price_ok_for_discharge = state["export_price"] >= state["min_export_price_c"] / 100.0
             if above_min_soc and price_ok_for_discharge:
-                # Actively discharge battery: load covered first, remainder exported to grid
-                self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
+                # Export solar first; battery fills remaining export capacity
+                self._set_sigen_mode(SIGEN_MODE_DISCHARGE_PV)
                 self._set_charge_limit(0.0)
                 self._set_discharge_limit(max_dis)
                 self._set_export_limits(max_exp, max_exp)
@@ -514,8 +514,8 @@ class EnergyController(hass.Hass):
             self._set_export_limits(0.0, max_exp)
 
         elif mode == Mode.MAN_EXPORT_BATTERY:
-            # Actively discharge battery to grid at full rate
-            self._set_sigen_mode(SIGEN_MODE_DISCHARGE_ESS)
+            # Export solar first; battery fills remaining export capacity
+            self._set_sigen_mode(SIGEN_MODE_DISCHARGE_PV)
             self._set_charge_limit(0.0)
             self._set_discharge_limit(max_dis)
             self._set_export_limits(max_exp, max_exp)
@@ -549,10 +549,10 @@ class EnergyController(hass.Hass):
             self._set_export_limits(max_exp, max_exp)
 
         elif mode == Mode.SOLAR_EXPORT_SPIKE:
-            # Export solar to grid, suspend battery charging
+            # Export solar to grid, suspend battery charging and discharge
             self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(0.0)
-            self._set_discharge_limit(max_dis)
+            self._set_discharge_limit(0.0)
             self._set_export_limits(max_exp, max_exp)
 
         elif mode == Mode.MAN_SOLAR_PRIORITY:
