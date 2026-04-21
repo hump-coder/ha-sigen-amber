@@ -254,18 +254,16 @@ views:
           - type: vertical-stack
             cards:
               - type: gauge
-                entity: sensor.sigen_plant_battery_state_of_charge
+                entity: sensor.battery_charge_kwh
                 name: Battery Charge
-                unit: "%"
+                unit: kWh
                 min: 0
-                max: 100
+                max: 48.36
                 needle: true
                 severity:
-                  green: 50
-                  yellow: 20
+                  green: 24.18
+                  yellow: 9.67
                   red: 0
-              - type: markdown
-                content: "## Battery charge: {{ [(states('sensor.sigen_plant_battery_state_of_charge')|float(0) / 100 * states('sensor.sigen_plant_rated_energy_capacity')|float(0))|round(1), 0]|max }}kWh"
           - !include energy_override_buttons.yaml
 
       # ── Section 3: Solar Forecast + Cost & Revenue ────────────
@@ -388,6 +386,85 @@ views:
                   legend_value: true
                   in_header: true
                   in_chart: false
+          - type: custom:apexcharts-card
+            header:
+              title: Solar forecast tomorrow
+              show: true
+              show_states: true
+              colorize_states: true
+            apex_config:
+              chart:
+                height: 300px
+              tooltip:
+                enabled: true
+                shared: true
+                followCursor: true
+            graph_span: 14h
+            span:
+              start: day
+              offset: +1d+6h
+            show:
+              loading: false
+            yaxis:
+              - id: kWh
+                show: true
+                min: 0
+                apex_config:
+                  tickAmount: 10
+              - id: header_only
+                show: false
+            series:
+              - entity: sensor.solcast_pv_forecast_forecast_tomorrow
+                name: Expected
+                color: Gold
+                opacity: 0.4
+                stroke_width: 0
+                type: area
+                extend_to: false
+                yaxis_id: kWh
+                show:
+                  legend_value: false
+                  in_header: false
+                data_generator: |
+                  return entity.attributes.detailedForecast.map((entry) => {
+                        return [new Date(entry.period_start), entry.pv_estimate];
+                      });
+              - entity: sensor.solcast_pv_forecast_forecast_tomorrow
+                name: Pessimistic
+                color: Grey
+                opacity: 0.3
+                stroke_width: 0
+                type: area
+                extend_to: false
+                yaxis_id: kWh
+                show:
+                  legend_value: false
+                  in_header: false
+                data_generator: |
+                  return entity.attributes.detailedForecast.map((entry) => {
+                        return [new Date(entry.period_start), entry.pv_estimate10];
+                      });
+              - entity: sensor.solcast_pv_forecast_forecast_tomorrow
+                yaxis_id: header_only
+                name: Expected
+                color: Gold
+                show:
+                  legend_value: true
+                  in_header: true
+                  in_chart: false
+                data_generator: |
+                  return [[Date.now(), parseFloat(entity.state)]];
+              - entity: sensor.solcast_pv_forecast_forecast_tomorrow
+                yaxis_id: header_only
+                name: Pessimistic
+                color: Grey
+                opacity: 0.3
+                show:
+                  legend_value: true
+                  in_header: true
+                  in_chart: false
+                data_generator: |
+                  return [[Date.now(), parseFloat(entity.attributes.estimate10)]];
           - type: custom:apexcharts-card
             header:
               show: true

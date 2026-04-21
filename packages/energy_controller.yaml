@@ -227,6 +227,16 @@ input_boolean:
 template:
   - sensor:
 
+      # Battery charge in kWh (SOC% × rated capacity)
+      - name: "Battery Charge kWh"
+        unique_id: battery_charge_kwh
+        unit_of_measurement: kWh
+        device_class: energy_storage
+        state_class: measurement
+        state: >
+          {{ [((states('sensor.sigen_plant_battery_state_of_charge') | float(0)) / 100
+             * (states('sensor.sigen_plant_rated_energy_capacity') | float(0))) | round(1), 0] | max }}
+
       # Current import price in c/kWh (human-friendly unit)
       - name: "Energy Import Price Cents"
         unique_id: energy_import_price_cents
