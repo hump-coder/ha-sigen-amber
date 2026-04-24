@@ -584,8 +584,10 @@ class EnergyController(hass.Hass):
         """Set grid-point and PCS export limits.
         grid_kw controls whether power reaches the grid.
         pcs_kw should always be max_exp – setting PCS to 0 curtails all solar
-        including generation used for local load, not just grid export."""
-        self._set_number(self.args.get("grid_export_limit_entity", ""), grid_kw, "grid export limit")
+        including generation used for local load, not just grid export.
+        The grid export limit is force-written every cycle: the Sigenergy inverter
+        reverts this register to its default (~10 kW) after ~15 min without a refresh."""
+        self._set_number(self.args.get("grid_export_limit_entity", ""), grid_kw, "grid export limit", force=True)
         pcs = self.args.get("pcs_export_limit_entity", "")
         if pcs:
             self._set_number(pcs, pcs_kw, "PCS export limit")
@@ -596,16 +598,18 @@ class EnergyController(hass.Hass):
     def _set_discharge_limit(self, kw: float):
         self._set_number(self.args.get("discharge_limit_entity", ""), kw, "discharge limit")
 
-    def _set_number(self, entity: str, value: float, label: str = ""):
+    def _set_number(self, entity: str, value: float, label: str = "", force: bool = False):
         if not entity:
             return
         try:
             current = float(self.get_state(entity) or 0)
-            if abs(current - value) < 0.05:
-                return  # No change needed
+            changed = abs(current - value) >= 0.05
         except (ValueError, TypeError):
-            pass
-        self.log(f"  {label} → {value} kW")
+            changed = True
+        if not force and not changed:
+            return
+        if changed:
+            self.log(f"  {label} → {value} kW")
         self.call_service("number/set_value", entity_id=entity, value=round(value, 3))
 
     # ------------------------------------------------------------------
