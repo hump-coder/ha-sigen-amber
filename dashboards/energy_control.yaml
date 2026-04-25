@@ -265,6 +265,63 @@ views:
                   green: 24.18
                   yellow: 9.67
                   red: 0
+              - type: custom:apexcharts-card
+                header:
+                  show: true
+                  title: Amber Price Forecast
+                graph_span: 20h
+                span:
+                  start: minute
+                yaxis:
+                  - decimals: 2
+                    apex_config:
+                      tickAmount: 8
+                apex_config:
+                  legend:
+                    show: true
+                  xaxis:
+                    type: datetime
+                    min: |
+                      return Date.now()
+                    max: |
+                      return Date.now() + 20 * 60 * 60 * 1000
+                series:
+                  - entity: sensor.amber_express_home_general_price
+                    name: Import
+                    type: line
+                    unit: " "
+                    stroke_width: 2
+                    curve: stepline
+                    float_precision: 2
+                    show:
+                      legend_value: false
+                    data_generator: |
+                      return (entity.attributes.forecast || [])
+                        .map(x => [new Date(x.time).getTime(), Number(x.value)])
+                        .filter(x =>
+                          !isNaN(x[0]) &&
+                          !isNaN(x[1]) &&
+                          x[0] >= Date.now() &&
+                          x[0] <= Date.now() + 20 * 60 * 60 * 1000
+                        );
+                  - entity: sensor.amber_express_home_feed_in_price
+                    name: Export
+                    type: line
+                    unit: " "
+                    stroke_width: 2
+                    curve: stepline
+                    float_precision: 2
+                    show:
+                      legend_value: false
+                    data_generator: |
+                      return (entity.attributes.forecast || [])
+                        .map(x => [new Date(x.time).getTime(), Number(x.value)])
+                        .filter(x =>
+                          !isNaN(x[0]) &&
+                          !isNaN(x[1]) &&
+                          x[0] >= Date.now() &&
+                          x[0] <= Date.now() + 20 * 60 * 60 * 1000
+                        );
           - !include energy_override_buttons.yaml
 
       # ── Section 3: Solar Forecast + Cost & Revenue ────────────
@@ -466,63 +523,6 @@ views:
                   in_chart: false
                 data_generator: |
                   return [[Date.now(), parseFloat(entity.attributes.estimate10)]];
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Amber Price Forecast
-            graph_span: 20h
-            span:
-              start: minute
-            yaxis:
-              - decimals: 2
-                apex_config:
-                  tickAmount: 8
-            apex_config:
-              legend:
-                show: true
-              xaxis:
-                type: datetime
-                min: |
-                  return Date.now()
-                max: |
-                  return Date.now() + 20 * 60 * 60 * 1000
-            series:
-              - entity: sensor.amber_express_home_general_price
-                name: Import
-                type: line
-                unit: " "
-                stroke_width: 2
-                curve: stepline
-                float_precision: 2
-                show:
-                  legend_value: false
-                data_generator: |
-                  return (entity.attributes.forecast || [])
-                    .map(x => [new Date(x.time).getTime(), Number(x.value)])
-                    .filter(x =>
-                      !isNaN(x[0]) &&
-                      !isNaN(x[1]) &&
-                      x[0] >= Date.now() &&
-                      x[0] <= Date.now() + 20 * 60 * 60 * 1000
-                    );
-              - entity: sensor.amber_express_home_feed_in_price
-                name: Export
-                type: line
-                unit: " "
-                stroke_width: 2
-                curve: stepline
-                float_precision: 2
-                show:
-                  legend_value: false
-                data_generator: |
-                  return (entity.attributes.forecast || [])
-                    .map(x => [new Date(x.time).getTime(), Number(x.value)])
-                    .filter(x =>
-                      !isNaN(x[0]) &&
-                      !isNaN(x[1]) &&
-                      x[0] >= Date.now() &&
-                      x[0] <= Date.now() + 20 * 60 * 60 * 1000
-                    );
           - type: markdown
             content: |
               {% set imp     = states('input_number.energy_daily_import_cost') | float(0) %}
