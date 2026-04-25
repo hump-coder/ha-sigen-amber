@@ -115,6 +115,9 @@ class EnergyController(hass.Hass):
         self._daily_import_kwh     = _restore("daily_import_kwh_entity")
         self._daily_export_kwh     = _restore("daily_export_kwh_entity")
         self._last_cost_ts: datetime | None = None
+        # Tracks when we last issued a real Modbus write to the grid export limit register.
+        # Used to ensure a keep-alive nudge is sent before the inverter's 15-min timeout.
+        self._last_export_limit_write_ts: float = 0.0
 
         # Schedule main control loop
         interval = int(self.args.get("interval", 60))
@@ -609,9 +612,36 @@ class EnergyController(hass.Hass):
         grid_kw controls whether power reaches the grid.
         pcs_kw should always be max_exp – setting PCS to 0 curtails all solar
         including generation used for local load, not just grid export.
-        The grid export limit is force-written every cycle: the Sigenergy inverter
-        reverts this register to its default (~10 kW) after ~15 min without a refresh."""
-        self._set_number(self.args.get("grid_export_limit_entity", ""), grid_kw, "grid export limit", force=True)
+
+        The Sigenergy inverter reverts the grid export limit register to ~10 kW after
+        ~15 min without a Modbus write. The integration skips writes when the HA entity
+        value is unchanged, so force=True alone doesn't help. Instead, when the target
+        is near-zero and no real change has occurred, we first write a nudge value
+        (0.001 kW) so the integration sees a state change and issues a real Modbus write,
+        then immediately write the true target (0.0). This keeps the inverter's register
+        timer reset well within its 15-min window."""
+        entity = self.args.get("grid_export_limit_entity", "")
+        if entity:
+            try:
+                current = float(self.get_state(entity) or 0)
+                changed = abs(current - grid_kw) >= 0.05
+            except (ValueError, TypeError):
+                changed = True
+
+            now = datetime.now(timezone.utc).timestamp()
+            keepalive_due = (now - self._last_export_limit_write_ts) >= 300  # every 5 min
+
+            if changed:
+                self.log(f"  grid export limit → {grid_kw} kW")
+                self.call_service("number/set_value", entity_id=entity, value=round(grid_kw, 3))
+                self._last_export_limit_write_ts = now
+            elif keepalive_due and grid_kw < 0.05:
+                # No real change, but nudge through a near-zero value to force a Modbus write.
+                self.log("  grid export limit keep-alive (0.001 → 0.0 kW)")
+                self.call_service("number/set_value", entity_id=entity, value=0.001)
+                self.call_service("number/set_value", entity_id=entity, value=0.0)
+                self._last_export_limit_write_ts = now
+
         pcs = self.args.get("pcs_export_limit_entity", "")
         if pcs:
             self._set_number(pcs, pcs_kw, "PCS export limit")
