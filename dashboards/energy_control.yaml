@@ -30,6 +30,7 @@ views:
                 grid_active: sensor.sigen_plant_grid_active_power
                 battery_capacity: sensor.sigen_plant_rated_energy_capacity
                 battery_min_soc: input_number.energy_battery_min_soc
+                text_size: input_number.energy_power_flow_text_size
                 sun: sun.sun
           - type: conditional
             conditions:
@@ -659,6 +660,9 @@ views:
           - entity: input_boolean.energy_power_flow_visual
             name: Graphical Power Flow (animated house view)
             icon: mdi:home-lightning-bolt-outline
+          - entity: input_number.energy_power_flow_text_size
+            name: Power Flow Card Text Size (1–10)
+            icon: mdi:format-size
 
       # ── Hands-off Override ───────────────────────────────────
       - type: entities

@@ -97,6 +97,14 @@ input_number:
     unit_of_measurement: "c/kWh"
     icon: mdi:transmission-tower-export
 
+  energy_power_flow_text_size:
+    name: "Power Flow Card Text Size"
+    min: 1
+    max: 10
+    step: 1
+    initial: 5
+    icon: mdi:format-size
+
   energy_solar_export_spike_threshold:
     name: "Solar Export Spike Threshold"
     min: 0
