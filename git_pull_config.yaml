@@ -8,7 +8,6 @@
 #   packages/           → /config/packages/
 #   appdaemon/apps/     → /config/appdaemon/apps/  (if AppDaemon add-on is used)
 #   dashboards/         → /config/dashboards/
-#   www/                → /config/www/  (served at /local/ in HA)
 
 repository: "https://github.com/hump-coder/ha-sigen-amber"
 auto_restart: false

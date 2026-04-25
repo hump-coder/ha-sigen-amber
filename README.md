@@ -26,14 +26,11 @@ HA_SigenAmber/
 │   ├── apps/
 │   │   └── energy_controller.py    ← AppDaemon app (main logic)
 │   └── apps.yaml                   ← AppDaemon configuration
-├── packages/
-│   └── energy_controller.yaml      ← HA helpers + template sensors + automations
-├── dashboards/
-│   └── energy_control.yaml         ← Lovelace dashboard
-└── www/
-    └── sigenergy/
-        ├── sigenergy-house-card.js  ← Animated power flow card (standalone copy)
-        └── images/                  ← House card image assets
+└── homeassistant/
+    ├── packages/
+    │   └── energy_controller.yaml  ← HA helpers + template sensors + automations
+    └── dashboards/
+        └── energy_control.yaml     ← Lovelace dashboard
 ```
 
 ## Installation
@@ -91,28 +88,12 @@ Restart AppDaemon. Check the AppDaemon log for:
 Energy Controller initialised – polling every 60s
 ```
 
-### Step 5 – Register Lovelace Card Resource
-
-The animated power flow card (`sigenergy-house-card`) is included in this repo and deployed to `/config/www/sigenergy/` via git pull.
-
-Register it once in HA:  
-**Settings → Dashboards → (three-dot menu) → Resources → Add Resource**
-
-| Field | Value |
-|-------|-------|
-| URL | `/local/sigenergy/sigenergy-house-card.js` |
-| Resource type | `JavaScript Module` |
-
-Restart HA (or reload Lovelace resources) after adding.
-
-> If the Genergy Dashboard integration is installed, it auto-registers this card from its own copy — this step makes the card available independently of that integration.
-
-### Step 6 – Dashboard
+### Step 5 – Dashboard
 
 In HA → Settings → Dashboards → Add Dashboard.
-Paste the contents of `dashboards/energy_control.yaml` into the raw configuration editor.
+Paste the contents of `homeassistant/dashboards/energy_control.yaml` into the raw configuration editor.
 
-### Step 7 – Configure Parameters
+### Step 6 – Configure Parameters
 
 Open the **Configuration** tab on the dashboard and set:
 
