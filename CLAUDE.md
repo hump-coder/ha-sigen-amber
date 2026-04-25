@@ -1,0 +1,1 @@
+When asked to deploy, please read the DEPLOY.md file in the root of this project.
