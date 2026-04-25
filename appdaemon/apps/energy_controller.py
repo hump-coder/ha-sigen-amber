@@ -131,6 +131,17 @@ class EnergyController(hass.Hass):
                 self.listen_state(self.on_price_change, entity,
                                   immediate=False)
 
+        # Trigger immediately when the inverter reverts the grid export limit register.
+        # The Sigenergy inverter resets this register to ~10 kW every ~15 min unless
+        # it receives regular Modbus refresh writes. The integration appears to skip
+        # Modbus writes when the HA entity value hasn't changed, so the timer never
+        # gets reset. This listener fires the moment the entity jumps back up,
+        # cutting the response from up to 60 s to ~1–2 s.
+        grid_exp_entity = self.args.get("grid_export_limit_entity", "")
+        if grid_exp_entity:
+            self.listen_state(self.on_export_limit_revert, grid_exp_entity,
+                              immediate=False)
+
         # Trigger on Solcast update
         solcast = self.args.get("solcast_today_entity", "")
         if solcast:
@@ -150,6 +161,19 @@ class EnergyController(hass.Hass):
     def on_solar_update(self, entity, attribute, old, new, kwargs):
         if old != new:
             self.log(f"Solar forecast updated: {old} → {new} kWh")
+            self.control_loop(kwargs)
+
+    def on_export_limit_revert(self, entity, attribute, old, new, kwargs):
+        """Re-apply control immediately when the inverter reverts the export limit register."""
+        try:
+            new_val = float(new) if new not in (None, "unknown", "unavailable", "") else 0.0
+        except (ValueError, TypeError):
+            return
+        if new_val > 0.05:
+            self.log(
+                f"Grid export limit reverted to {new_val} kW (was {old}) – re-applying control",
+                level="WARNING",
+            )
             self.control_loop(kwargs)
 
     # ------------------------------------------------------------------
