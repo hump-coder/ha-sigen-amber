@@ -230,6 +230,21 @@ input_boolean:
     name: "Power Flow: Graphical View"
     icon: mdi:home-lightning-bolt-outline
 
+# ── Legacy template sensor: entity_id set explicitly via key ──────────────
+# Uses old-style platform syntax so entity_id = sensor.battery_soc_display,
+# with a dynamic friendly_name showing kWh for the gauge label.
+
+sensor:
+  - platform: template
+    sensors:
+      battery_soc_display:
+        friendly_name_template: >-
+          Battery Charge {{ [((states('sensor.sigen_plant_battery_state_of_charge') | float(0)) / 100
+            * (states('sensor.sigen_plant_rated_energy_capacity') | float(0))) | round(1), 0] | max }} kWh
+        unit_of_measurement: "%"
+        value_template: >
+          {{ states('sensor.sigen_plant_battery_state_of_charge') | float(0) | round(0) | int }}
+
 # ── Template sensors ──────────────────────────────────────────────────────
 
 template:
@@ -244,6 +259,7 @@ template:
         state: >
           {{ [((states('sensor.sigen_plant_battery_state_of_charge') | float(0)) / 100
              * (states('sensor.sigen_plant_rated_energy_capacity') | float(0))) | round(1), 0] | max }}
+
 
       # Current import price in c/kWh (human-friendly unit)
       - name: "Energy Import Price Cents"

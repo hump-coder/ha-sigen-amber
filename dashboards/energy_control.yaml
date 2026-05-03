@@ -255,15 +255,13 @@ views:
           - type: vertical-stack
             cards:
               - type: gauge
-                entity: sensor.battery_charge_kwh
-                name: Battery Charge
-                unit: kWh
+                entity: sensor.battery_soc_display
                 min: 0
-                max: 48.36
+                max: 100
                 needle: true
                 severity:
-                  green: 24.18
-                  yellow: 9.67
+                  green: 50
+                  yellow: 20
                   red: 0
               - type: custom:apexcharts-card
                 header:
