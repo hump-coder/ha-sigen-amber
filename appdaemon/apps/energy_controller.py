@@ -275,6 +275,8 @@ class EnergyController(hass.Hass):
                     self.args.get("solar_export_spike_enabled_entity", "")) == "on",
                 "solar_export_spike_threshold_c": self._get_float(
                     self.args.get("solar_export_spike_threshold_entity", ""), 20.0),
+                "charge_from_grid_max_price_c": self._get_float(
+                    self.args.get("charge_from_grid_max_price_entity", ""), 20.0),
                 "forecast_prices":      self._forecast_prices(),
                 "forecast_export_prices": self._forecast_export_prices(),
             }
@@ -555,8 +557,13 @@ class EnergyController(hass.Hass):
             self._set_export_limits(max_exp if exp_pos else 0.0, max_exp)
 
         elif mode == Mode.MAN_CHARGE_GRID:
-            # Force charge from grid at max rate
-            self._set_sigen_mode(SIGEN_MODE_CHARGE_GRID)
+            import_c = state["import_price"] * 100.0
+            max_price_c = state["charge_from_grid_max_price_c"]
+            if import_c <= max_price_c:
+                self._set_sigen_mode(SIGEN_MODE_CHARGE_GRID)
+            else:
+                # Price above threshold – hold at self-consume until price drops
+                self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
             self._set_charge_limit(max_chg)
             self._set_discharge_limit(0.0)
             self._set_export_limits(0.0, max_exp)

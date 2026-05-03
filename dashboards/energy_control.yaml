@@ -252,6 +252,31 @@ views:
                         - color: var(--primary-text-color)
                       state:
                         - color: var(--primary-text-color)
+
+          # ── Notification Area ─────────────────────────────────
+          - type: markdown
+            content: >
+              {% set manual_mode = states('input_select.energy_manual_mode') %}
+              {% set ctrl_mode = states('sensor.energy_controller_mode') %}
+              {% set hands_off = is_state('input_boolean.energy_manual_override', 'on') %}
+              {% set spike = is_state('input_boolean.energy_solar_export_spike_enabled', 'on') %}
+              {% set max_exp = states('input_number.energy_max_export_power') | float(10) %}
+              {% set max_chg = states('input_number.energy_max_charge_power') | float(24) %}
+              {% set max_dis = states('input_number.energy_max_discharge_power') | float(10) %}
+              {% set exp_s = (max_exp | int | string) if max_exp % 1 == 0 else (max_exp | string) %}
+              {% set chg_s = (max_chg | int | string) if max_chg % 1 == 0 else (max_chg | string) %}
+              {% set dis_s = (max_dis | int | string) if max_dis % 1 == 0 else (max_dis | string) %}
+              {% set ns = namespace(overrides=[], mods=[]) %}
+              {% if manual_mode != 'Auto' %}{% set ns.overrides = ns.overrides + [manual_mode] %}{% endif %}
+              {% if hands_off %}{% set ns.overrides = ns.overrides + ['Hands-off'] %}{% endif %}
+              {% if spike %}{% set ns.overrides = ns.overrides + ['Solar Export Spike'] %}{% endif %}
+              {% if max_exp != 10 %}{% set ns.mods = ns.mods + ['Max Export ' ~ exp_s ~ 'kW'] %}{% endif %}
+              {% if max_chg != 24 %}{% set ns.mods = ns.mods + ['Max Charge ' ~ chg_s ~ 'kW'] %}{% endif %}
+              {% if max_dis != 10 %}{% set ns.mods = ns.mods + ['Max Discharge ' ~ dis_s ~ 'kW'] %}{% endif %}
+              **Mode:** {% if manual_mode == 'Auto' %}🟢 Auto · {{ ctrl_mode }}{% else %}🔧 {{ manual_mode }}{% endif %}
+              &nbsp;|&nbsp; **Overrides:** {% if ns.overrides | length > 0 %}⚠️ {{ ns.overrides | join(' · ') }}{% else %}None{% endif %}
+              &nbsp;|&nbsp; **Modified:** {% if ns.mods | length > 0 %}⚙️ {{ ns.mods | join(' · ') }}{% else %}—{% endif %}
+
           - type: vertical-stack
             cards:
               - type: gauge

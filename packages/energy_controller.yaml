@@ -114,6 +114,15 @@ input_number:
     unit_of_measurement: "c/kWh"
     icon: mdi:transmission-tower-export
 
+  energy_charge_from_grid_max_price:
+    name: "Charge from Grid — Max Import Price"
+    min: -10
+    max: 50
+    step: 1
+    initial: 20
+    unit_of_measurement: "c/kWh"
+    icon: mdi:battery-charging
+
   # ── Daily cost / revenue accumulators (written by AppDaemon, persist across restarts) ──
 
   energy_daily_import_cost:

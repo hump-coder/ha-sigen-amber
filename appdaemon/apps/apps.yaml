@@ -81,6 +81,7 @@ energy_controller:
   min_export_price_entity:        input_number.energy_min_export_price
   solar_export_spike_enabled_entity:    input_boolean.energy_solar_export_spike_enabled
   solar_export_spike_threshold_entity:  input_number.energy_solar_export_spike_threshold
+  charge_from_grid_max_price_entity:    input_number.energy_charge_from_grid_max_price
 
   # ── Manual override ────────────────────────────────────────────────────────
   manual_override_entity: input_boolean.energy_manual_override
