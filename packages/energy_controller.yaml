@@ -247,6 +247,7 @@ sensor:
   - platform: template
     sensors:
       battery_soc_display:
+
         friendly_name_template: >-
           Battery Charge {{ [((states('sensor.sigen_plant_battery_state_of_charge') | float(0)) / 100
             * (states('sensor.sigen_plant_rated_energy_capacity') | float(0))) | round(1), 0] | max }} kWh

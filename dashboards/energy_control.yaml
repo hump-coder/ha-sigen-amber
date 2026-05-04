@@ -668,6 +668,508 @@ views:
             name: Mode
 
   # ══════════════════════════════════════════════════════════════
+  - title: Stats 7d
+    path: stats-7d
+    icon: mdi:chart-bar
+    type: sections
+    max_columns: 2
+    badges: []
+    sections:
+
+      # ── 1. Daily Energy Totals ───────────────────────────────────
+      - column_span: 2
+        cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Energy — Solar / House Load / Import / Export (kWh)
+              show: true
+            graph_span: 7d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 280
+              plotOptions:
+                bar:
+                  columnWidth: 60%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "dd MMM"
+              dataLabels:
+                enabled: false
+              legend:
+                show: true
+                position: top
+            yaxis:
+              - decimals: 1
+                apex_config:
+                  title:
+                    text: kWh
+            series:
+              - entity: sensor.sigen_plant_daily_pv_energy
+                name: Solar
+                type: column
+                color: "#FFA726"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: sensor.sigen_plant_daily_load_consumption
+                name: House Load
+                type: column
+                color: "#42A5F5"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: input_number.energy_daily_import_kwh
+                name: Import
+                type: column
+                color: "#EF5350"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: input_number.energy_daily_export_kwh
+                name: Export
+                type: column
+                color: "#66BB6A"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+
+      # ── 2. Peak Solar / Avg Load ─────────────────────────────────
+      - cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Peak Solar Power (kW)
+              show: true
+            graph_span: 7d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 240
+              plotOptions:
+                bar:
+                  columnWidth: 60%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "dd MMM"
+              legend:
+                show: false
+            yaxis:
+              - decimals: 1
+                min: 0
+                apex_config:
+                  title:
+                    text: kW
+            series:
+              - entity: sensor.sigen_plant_pv_power
+                name: Peak Solar
+                type: column
+                color: "#FFA726"
+                unit: kW
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+
+      - cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Average House Load (kW)
+              show: true
+            graph_span: 7d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 240
+              plotOptions:
+                bar:
+                  columnWidth: 60%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "dd MMM"
+              legend:
+                show: false
+            yaxis:
+              - decimals: 2
+                min: 0
+                apex_config:
+                  title:
+                    text: kW
+            series:
+              - entity: sensor.sigen_plant_total_load_power
+                name: Avg Load
+                type: column
+                color: "#42A5F5"
+                unit: kW
+                float_precision: 2
+                group_by:
+                  func: avg
+                  duration: 1d
+
+      # ── 3. Daily Cost & Revenue ──────────────────────────────────
+      - column_span: 2
+        cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Import Cost vs Export Revenue ($)
+              show: true
+            graph_span: 7d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 260
+              plotOptions:
+                bar:
+                  columnWidth: 60%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "dd MMM"
+              legend:
+                show: true
+                position: top
+            yaxis:
+              - decimals: 2
+                apex_config:
+                  title:
+                    text: $
+            series:
+              - entity: input_number.energy_daily_import_cost
+                name: Import Cost
+                type: column
+                color: "#EF5350"
+                float_precision: 2
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: input_number.energy_daily_export_revenue
+                name: Export Revenue
+                type: column
+                color: "#66BB6A"
+                float_precision: 2
+                group_by:
+                  func: max
+                  duration: 1d
+
+      # ── 4. Import / Export Price Range ───────────────────────────
+      - cards:
+          - type: statistics-graph
+            title: Import Price — Daily High / Low / Avg (c/kWh)
+            entities:
+              - entity: sensor.energy_import_price_cents
+                name: Import
+            days_to_show: 7
+            period: day
+            stat_types:
+              - min
+              - mean
+              - max
+            chart_type: line
+
+      - cards:
+          - type: statistics-graph
+            title: Export Price — Daily High / Low / Avg (c/kWh)
+            entities:
+              - entity: sensor.energy_export_price_cents
+                name: Export
+            days_to_show: 7
+            period: day
+            stat_types:
+              - min
+              - mean
+              - max
+            chart_type: line
+
+      # ── 5. Battery SOC & Charge Level ───────────────────────────
+      - cards:
+          - type: statistics-graph
+            title: Battery SOC — Daily Range (%)
+            entities:
+              - entity: sensor.sigen_plant_battery_state_of_charge
+                name: Battery SOC
+            days_to_show: 7
+            period: day
+            stat_types:
+              - min
+              - mean
+              - max
+            chart_type: line
+
+      - cards:
+          - type: statistics-graph
+            title: Battery Charge — Daily High / Low (kWh)
+            entities:
+              - entity: sensor.battery_charge_kwh
+                name: Battery kWh
+            days_to_show: 7
+            period: day
+            stat_types:
+              - min
+              - max
+            chart_type: line
+
+  # ══════════════════════════════════════════════════════════════
+  - title: Stats 14d
+    path: stats-14d
+    icon: mdi:chart-bar-stacked
+    type: sections
+    max_columns: 2
+    badges: []
+    sections:
+
+      # ── 1. Daily Energy Totals ───────────────────────────────────
+      - column_span: 2
+        cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Energy — Solar / House Load / Import / Export (kWh)
+              show: true
+            graph_span: 14d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 280
+              plotOptions:
+                bar:
+                  columnWidth: 70%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "d/M"
+              dataLabels:
+                enabled: false
+              legend:
+                show: true
+                position: top
+            yaxis:
+              - decimals: 1
+                apex_config:
+                  title:
+                    text: kWh
+            series:
+              - entity: sensor.sigen_plant_daily_pv_energy
+                name: Solar
+                type: column
+                color: "#FFA726"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: sensor.sigen_plant_daily_load_consumption
+                name: House Load
+                type: column
+                color: "#42A5F5"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: input_number.energy_daily_import_kwh
+                name: Import
+                type: column
+                color: "#EF5350"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: input_number.energy_daily_export_kwh
+                name: Export
+                type: column
+                color: "#66BB6A"
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+
+      # ── 2. Peak Solar / Avg Load ─────────────────────────────────
+      - cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Peak Solar Power (kW)
+              show: true
+            graph_span: 14d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 240
+              plotOptions:
+                bar:
+                  columnWidth: 70%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "d/M"
+              legend:
+                show: false
+            yaxis:
+              - decimals: 1
+                min: 0
+                apex_config:
+                  title:
+                    text: kW
+            series:
+              - entity: sensor.sigen_plant_pv_power
+                name: Peak Solar
+                type: column
+                color: "#FFA726"
+                unit: kW
+                float_precision: 1
+                group_by:
+                  func: max
+                  duration: 1d
+
+      - cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Average House Load (kW)
+              show: true
+            graph_span: 14d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 240
+              plotOptions:
+                bar:
+                  columnWidth: 70%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "d/M"
+              legend:
+                show: false
+            yaxis:
+              - decimals: 2
+                min: 0
+                apex_config:
+                  title:
+                    text: kW
+            series:
+              - entity: sensor.sigen_plant_total_load_power
+                name: Avg Load
+                type: column
+                color: "#42A5F5"
+                unit: kW
+                float_precision: 2
+                group_by:
+                  func: avg
+                  duration: 1d
+
+      # ── 3. Daily Cost & Revenue ──────────────────────────────────
+      - column_span: 2
+        cards:
+          - type: custom:apexcharts-card
+            header:
+              title: Daily Import Cost vs Export Revenue ($)
+              show: true
+            graph_span: 14d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 260
+              plotOptions:
+                bar:
+                  columnWidth: 70%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "d/M"
+              legend:
+                show: true
+                position: top
+            yaxis:
+              - decimals: 2
+                apex_config:
+                  title:
+                    text: $
+            series:
+              - entity: input_number.energy_daily_import_cost
+                name: Import Cost
+                type: column
+                color: "#EF5350"
+                float_precision: 2
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: input_number.energy_daily_export_revenue
+                name: Export Revenue
+                type: column
+                color: "#66BB6A"
+                float_precision: 2
+                group_by:
+                  func: max
+                  duration: 1d
+
+      # ── 4. Import / Export Price Range ───────────────────────────
+      - cards:
+          - type: statistics-graph
+            title: Import Price — Daily High / Low / Avg (c/kWh)
+            entities:
+              - entity: sensor.energy_import_price_cents
+                name: Import
+            days_to_show: 14
+            period: day
+            stat_types:
+              - min
+              - mean
+              - max
+            chart_type: line
+
+      - cards:
+          - type: statistics-graph
+            title: Export Price — Daily High / Low / Avg (c/kWh)
+            entities:
+              - entity: sensor.energy_export_price_cents
+                name: Export
+            days_to_show: 14
+            period: day
+            stat_types:
+              - min
+              - mean
+              - max
+            chart_type: line
+
+      # ── 5. Battery SOC & Charge Level ───────────────────────────
+      - cards:
+          - type: statistics-graph
+            title: Battery SOC — Daily Range (%)
+            entities:
+              - entity: sensor.sigen_plant_battery_state_of_charge
+                name: Battery SOC
+            days_to_show: 14
+            period: day
+            stat_types:
+              - min
+              - mean
+              - max
+            chart_type: line
+
+      - cards:
+          - type: statistics-graph
+            title: Battery Charge — Daily High / Low (kWh)
+            entities:
+              - entity: sensor.battery_charge_kwh
+                name: Battery kWh
+            days_to_show: 14
+            period: day
+            stat_types:
+              - min
+              - max
+            chart_type: line
+
+  # ══════════════════════════════════════════════════════════════
   - title: Configuration
     path: configuration
     icon: mdi:cog

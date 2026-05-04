@@ -63,70 +63,96 @@ cards:
             entity_id: input_select.energy_manual_mode
             option: "Stop Battery Export"
 
-  - type: horizontal-stack
-    cards:
-      - type: custom:button-card
-        entity: input_select.energy_manual_mode
-        name: Charge from Grid
-        icon: mdi:battery-charging
-        show_state: false
-        tap_action:
-          action: call-service
-          service: input_select.select_option
-          data:
-            entity_id: input_select.energy_manual_mode
-            option: "Charge from Grid"
-        state:
-          - operator: template
-            value: |
-              [[[
-                return entity.state === 'Charge from Grid';
-              ]]]
-            styles:
-              card:
-                - background: rgba(255, 152, 0, 0.18)
-              icon:
-                - color: rgb(255, 152, 0)
-
-      - type: custom:button-card
-        icon: mdi:minus
-        show_name: false
-        tap_action:
-          action: call-service
-          service: input_number.decrement
-          service_data:
-            entity_id: input_number.energy_charge_from_grid_max_price
-
-      - type: custom:button-card
-        entity: input_number.energy_charge_from_grid_max_price
-        show_icon: false
-        show_state: false
-        show_name: true
-        show_label: true
-        name: |
+  - type: custom:button-card
+    entity: input_select.energy_manual_mode
+    name: Charge from Grid
+    icon: mdi:battery-charging
+    show_state: false
+    tap_action:
+      action: call-service
+      service: input_select.select_option
+      data:
+        entity_id: input_select.energy_manual_mode
+        option: "Charge from Grid"
+    custom_fields:
+      minus_btn:
+        card:
+          type: custom:button-card
+          icon: mdi:minus
+          show_name: false
+          styles:
+            card:
+              - background: none
+              - box-shadow: none
+              - padding: 2px
+          tap_action:
+            action: call-service
+            service: input_number.decrement
+            service_data:
+              entity_id: input_number.energy_charge_from_grid_max_price
+      price_disp:
+        card:
+          type: custom:button-card
+          entity: input_number.energy_charge_from_grid_max_price
+          show_icon: false
+          show_state: false
+          show_name: true
+          show_label: true
+          name: |
+            [[[
+              const v = Number(entity.state);
+              return isNaN(v) ? '—' : `${Math.round(v)}c`;
+            ]]]
+          label: max charge price
+          styles:
+            card:
+              - background: none
+              - box-shadow: none
+              - padding: 2px
+            name:
+              - font-size: 18px
+              - font-weight: 800
+            label:
+              - font-size: 10px
+              - opacity: 0.65
+          tap_action:
+            action: more-info
+      plus_btn:
+        card:
+          type: custom:button-card
+          icon: mdi:plus
+          show_name: false
+          styles:
+            card:
+              - background: none
+              - box-shadow: none
+              - padding: 2px
+          tap_action:
+            action: call-service
+            service: input_number.increment
+            service_data:
+              entity_id: input_number.energy_charge_from_grid_max_price
+    styles:
+      grid:
+        - grid-template-areas: '"i n n n" ". minus_btn price_disp plus_btn"'
+        - grid-template-columns: 56px 1fr 2fr 1fr
+        - grid-template-rows: auto auto
+      card:
+        - padding: 12px 16px
+      name:
+        - justify-self: start
+        - font-weight: 700
+    state:
+      - operator: template
+        value: |
           [[[
-            const v = Number(entity.state);
-            return isNaN(v) ? '—' : `${Math.round(v)}c`;
+            return entity.state === 'Charge from Grid';
           ]]]
-        label: max charge price
-        tap_action:
-          action: more-info
         styles:
-          name:
-            - font-size: 22px
-            - font-weight: 800
-          label:
-            - font-size: 10px
-            - opacity: 0.65
-
-      - type: custom:button-card
-        icon: mdi:plus
-        show_name: false
-        tap_action:
-          action: call-service
-          service: input_number.increment
-          service_data:
-            entity_id: input_number.energy_charge_from_grid_max_price
+          card:
+            - background: rgba(255, 152, 0, 0.18)
+          icon:
+            - color: rgb(255, 152, 0)
 
   - type: horizontal-stack
     cards:
