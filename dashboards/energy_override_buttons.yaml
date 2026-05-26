@@ -99,9 +99,8 @@ cards:
         [[[
           const v = Number(states['input_number.energy_charge_from_grid_max_price'].state);
           return isNaN(v)
-            ? '<span style="font-size:30px;font-weight:800;">—</span>'
-            : `<span style="font-size:30px;font-weight:800;color:var(--primary-text-color);">${Math.round(v)}c</span>`
-              + '<br><span style="font-size:11px;opacity:0.55;">max price</span>';
+            ? '<div style="text-align:center"><span style="font-size:30px;font-weight:800;">—</span></div>'
+            : `<div style="text-align:center"><span style="font-size:30px;font-weight:800;color:var(--primary-text-color);">${Math.round(v)}c</span><br><span style="font-size:11px;opacity:0.55;">max price</span></div>`;
         ]]]
       plus_btn:
         card:
@@ -147,9 +146,8 @@ cards:
         [[[
           const v = Number(states['input_number.energy_charge_grid_target_soc'].state);
           return isNaN(v)
-            ? '<span style="font-size:30px;font-weight:800;">—</span>'
-            : `<span style="font-size:30px;font-weight:800;color:var(--primary-text-color);">${Math.round(v)}%</span>`
-              + '<br><span style="font-size:11px;opacity:0.55;">target SOC</span>';
+            ? '<div style="text-align:center"><span style="font-size:30px;font-weight:800;">—</span></div>'
+            : `<div style="text-align:center"><span style="font-size:30px;font-weight:800;color:var(--primary-text-color);">${Math.round(v)}%</span><br><span style="font-size:11px;opacity:0.55;">target SOC</span></div>`;
         ]]]
       soc_plus_btn:
         card:
@@ -175,7 +173,7 @@ cards:
       grid:
         - grid-template-areas: '"i n n n" ". minus_btn price_disp plus_btn" ". soc_minus_btn soc_disp soc_plus_btn"'
         - grid-template-columns: 56px 1fr 2fr 1fr
-        - grid-template-rows: auto 56px 56px
+        - grid-template-rows: auto 72px 72px
       card:
         - padding: 12px 16px
       name:
@@ -187,13 +185,11 @@ cards:
           - display: flex
           - align-items: center
           - justify-content: center
-          - flex-direction: column
           - height: 100%
         soc_disp:
           - display: flex
           - align-items: center
           - justify-content: center
-          - flex-direction: column
           - height: 100%
     state:
       - operator: template
