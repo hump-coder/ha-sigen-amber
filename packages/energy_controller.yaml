@@ -102,7 +102,6 @@ input_number:
     min: 1
     max: 10
     step: 1
-    initial: 5
     icon: mdi:format-size
 
   energy_solar_export_spike_threshold:
@@ -110,7 +109,6 @@ input_number:
     min: 0
     max: 200
     step: 1
-    initial: 20
     unit_of_measurement: "c/kWh"
     icon: mdi:transmission-tower-export
 
@@ -119,7 +117,6 @@ input_number:
     min: -10
     max: 50
     step: 1
-    initial: 20
     unit_of_measurement: "c/kWh"
     icon: mdi:battery-charging
 
@@ -128,7 +125,6 @@ input_number:
     min: 10
     max: 100
     step: 5
-    initial: 100
     unit_of_measurement: "%"
     icon: mdi:battery-charging
 
