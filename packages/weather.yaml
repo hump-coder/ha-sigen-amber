@@ -1,0 +1,27 @@
+# Weather package – Bureau of Meteorology forecast aggregator
+# ============================================================
+# Reads from the individual daily forecast sensors created by the
+# bremor/bureau_of_meteorology integration (create_forecasts: true)
+# and combines them into a single forecast attribute list that
+# apexcharts-card data_generator can use via entity.attributes.forecast.
+#
+# Entity: sensor.sampson_flat_forecast
+# Requires HA restart to load.
+
+template:
+  - sensor:
+      - name: "Sampson Flat Forecast"
+        unique_id: sampson_flat_weather_forecast
+        state: "{{ now().isoformat() }}"
+        attributes:
+          forecast: >
+            {{ [
+              {'date': state_attr('sensor.sampson_flat_temp_max_0','date'), 'temp_max': states('sensor.sampson_flat_temp_max_0')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_0')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_0')|float(0)},
+              {'date': state_attr('sensor.sampson_flat_temp_max_1','date'), 'temp_max': states('sensor.sampson_flat_temp_max_1')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_1')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_1')|float(0)},
+              {'date': state_attr('sensor.sampson_flat_temp_max_2','date'), 'temp_max': states('sensor.sampson_flat_temp_max_2')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_2')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_2')|float(0)},
+              {'date': state_attr('sensor.sampson_flat_temp_max_3','date'), 'temp_max': states('sensor.sampson_flat_temp_max_3')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_3')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_3')|float(0)},
+              {'date': state_attr('sensor.sampson_flat_temp_max_4','date'), 'temp_max': states('sensor.sampson_flat_temp_max_4')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_4')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_4')|float(0)},
+              {'date': state_attr('sensor.sampson_flat_temp_max_5','date'), 'temp_max': states('sensor.sampson_flat_temp_max_5')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_5')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_5')|float(0)},
+              {'date': state_attr('sensor.sampson_flat_temp_max_6','date'), 'temp_max': states('sensor.sampson_flat_temp_max_6')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_6')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_6')|float(0)},
+              {'date': state_attr('sensor.sampson_flat_temp_max_7','date'), 'temp_max': states('sensor.sampson_flat_temp_max_7')|float(0), 'temp_min': states('sensor.sampson_flat_temp_min_7')|float(0), 'rain': states('sensor.sampson_flat_rain_chance_7')|float(0)}
+            ] | selectattr('date') | list }}

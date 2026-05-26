@@ -1170,6 +1170,123 @@ views:
             chart_type: line
 
   # ══════════════════════════════════════════════════════════════
+  - title: Weather
+    path: weather
+    icon: mdi:weather-partly-cloudy
+    type: sections
+    max_columns: 1
+    badges: []
+    sections:
+
+      # ── DEBUG: forecast sensor check ─────────────────────────────
+      - cards:
+          - type: markdown
+            content: >
+              **Forecast sensor (needs HA restart to appear):**
+              `sensor.sampson_flat_forecast` = {{ states('sensor.sampson_flat_forecast') }}
+
+              {% if states('sensor.sampson_flat_forecast') not in ('unknown', 'unavailable') %}
+              Entries: {{ state_attr('sensor.sampson_flat_forecast', 'forecast') | length }}
+              — First: {{ (state_attr('sensor.sampson_flat_forecast', 'forecast') or [])[0] }}
+              {% else %}
+              **Restart HA to create this sensor, then hard-refresh the browser.**
+              {% endif %}
+
+      # ── Temperature Forecast ──────────────────────────────────────
+      - cards:
+          - type: custom:apexcharts-card
+            header:
+              title: "8-Day Temperature Forecast – Sampson Flat"
+              show: true
+            update_interval: 3600
+            apex_config:
+              chart:
+                height: 320
+                toolbar:
+                  show: false
+              stroke:
+                curve: smooth
+                width: 2
+              markers:
+                size: 5
+              xaxis:
+                type: datetime
+                labels:
+                  format: "EEE d/M"
+                  datetimeUTC: false
+              tooltip:
+                x:
+                  format: "EEE d MMM"
+                shared: true
+              legend:
+                show: true
+                position: top
+            yaxis:
+              - decimals: 0
+                apex_config:
+                  title:
+                    text: "°C"
+            series:
+              - entity: sensor.sampson_flat_forecast
+                name: "Max °C"
+                color: "#FF6B6B"
+                type: line
+                data_generator: |
+                  return entity.attributes.forecast
+                    .filter(d => d.date && d.temp_max !== 0)
+                    .map(d => [new Date(d.date).getTime(), d.temp_max]);
+              - entity: sensor.sampson_flat_forecast
+                name: "Min °C"
+                color: "#42A5F5"
+                type: line
+                data_generator: |
+                  return entity.attributes.forecast
+                    .filter(d => d.date && d.temp_min !== 0)
+                    .map(d => [new Date(d.date).getTime(), d.temp_min]);
+
+      # ── Precipitation Probability ─────────────────────────────────
+      - cards:
+          - type: custom:apexcharts-card
+            header:
+              title: "Rain Chance (%)"
+              show: true
+            update_interval: 3600
+            apex_config:
+              chart:
+                height: 220
+                toolbar:
+                  show: false
+              plotOptions:
+                bar:
+                  columnWidth: 50%
+              xaxis:
+                type: datetime
+                labels:
+                  format: "EEE d/M"
+                  datetimeUTC: false
+              tooltip:
+                x:
+                  format: "EEE d MMM"
+              legend:
+                show: false
+            yaxis:
+              - min: 0
+                max: 100
+                decimals: 0
+                apex_config:
+                  title:
+                    text: "%"
+            series:
+              - entity: sensor.sampson_flat_forecast
+                name: "Rain chance"
+                color: "#42A5F5"
+                type: column
+                data_generator: |
+                  return entity.attributes.forecast
+                    .filter(d => d.date)
+                    .map(d => [new Date(d.date).getTime(), d.rain]);
+
+  # ══════════════════════════════════════════════════════════════
   - title: Configuration
     path: configuration
     icon: mdi:cog
