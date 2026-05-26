@@ -1006,6 +1006,16 @@ class EnergyController(hass.Hass):
         if not (hour >= relax_start or hour < morning_end):
             return base, f"export min SOC {base:.0f}% (outside relaxation window {relax_start:.0f}:00–{morning_end:.0f}:00)"
 
+        # Don't relax the floor on a low-solar day. The relaxation exists for
+        # nights before good solar days; on a low-solar day the battery will be
+        # needed to cover load during the day, so keep the full export_min_soc.
+        is_low_solar, low_solar_reason = self._is_low_solar_day(state)
+        if is_low_solar:
+            return base, (
+                f"export min SOC {base:.0f}% (low solar day: {low_solar_reason} "
+                f"– floor not relaxed)"
+            )
+
         m = self._morning_solar_stats(state)
         if m is None:
             return base, f"export min SOC {base:.0f}% (no Solcast data or load unconfigured)"
