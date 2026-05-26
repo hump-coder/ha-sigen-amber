@@ -123,6 +123,15 @@ input_number:
     unit_of_measurement: "c/kWh"
     icon: mdi:battery-charging
 
+  energy_charge_grid_target_soc:
+    name: "Charge from Grid — Target SOC"
+    min: 10
+    max: 100
+    step: 5
+    initial: 100
+    unit_of_measurement: "%"
+    icon: mdi:battery-charging
+
   # ── Daily cost / revenue accumulators (written by AppDaemon, persist across restarts) ──
 
   energy_daily_import_cost:

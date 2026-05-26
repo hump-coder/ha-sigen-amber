@@ -277,6 +277,8 @@ class EnergyController(hass.Hass):
                     self.args.get("solar_export_spike_threshold_entity", ""), 20.0),
                 "charge_from_grid_max_price_c": self._get_float(
                     self.args.get("charge_from_grid_max_price_entity", ""), 20.0),
+                "charge_grid_target_soc": self._get_float(
+                    self.args.get("charge_grid_target_soc_entity", ""), 100.0),
                 "forecast_prices":      self._forecast_prices(),
                 "forecast_export_prices": self._forecast_export_prices(),
             }
@@ -557,9 +559,34 @@ class EnergyController(hass.Hass):
             self._set_export_limits(max_exp if exp_pos else 0.0, max_exp)
 
         elif mode == Mode.MAN_CHARGE_GRID:
+            target_soc = state["charge_grid_target_soc"]
             import_c = state["import_price"] * 100.0
             max_price_c = state["charge_from_grid_max_price_c"]
-            if import_c <= max_price_c:
+            if state["battery_soc"] >= target_soc:
+                # Target reached – reset manual mode to Auto and apply self-consume
+                # for the remainder of this cycle (next cycle runs fully in auto).
+                manual_mode_entity = self.args.get("manual_mode_entity", "")
+                if manual_mode_entity:
+                    self.log(
+                        f"Charge-from-grid target {target_soc:.0f}% reached "
+                        f"(battery {state['battery_soc']:.0f}%) – resetting to Auto"
+                    )
+                    self.call_service("input_select/select_option",
+                                      entity_id=manual_mode_entity, option="Auto")
+                eff_min_soc, _ = self._effective_export_min_soc(state)
+                above_min_soc = state["battery_soc"] > eff_min_soc
+                price_ok_for_discharge = state["export_price"] >= state["min_export_price_c"] / 100.0
+                if above_min_soc and price_ok_for_discharge:
+                    self._set_sigen_mode(SIGEN_MODE_DISCHARGE_PV)
+                    self._set_charge_limit(0.0)
+                    self._set_discharge_limit(max_dis)
+                    self._set_export_limits(max_exp, max_exp)
+                else:
+                    self._set_sigen_mode(SIGEN_MODE_SELF_CONSUME)
+                    self._set_charge_limit(max_chg)
+                    self._set_discharge_limit(max_dis)
+                    self._set_export_limits(max_exp if exp_pos else 0.0, max_exp)
+            elif import_c <= max_price_c:
                 # Price OK – charge from grid. Self-consume behaviour for load:
                 # allow battery to discharge to cover load, except when import price
                 # is free/negative (prefer cheap grid over depleting the battery then).
