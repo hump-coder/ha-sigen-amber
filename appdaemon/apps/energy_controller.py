@@ -398,12 +398,15 @@ class EnergyController(hass.Hass):
                 return (Mode.HOLD_BATTERY,
                         f"Low solar day ({solar_reason}), battery {battery_soc:.0f}% "
                         f"< min, waiting for cheap window at {next_cheap}")
-            else:
-                # No cheap window ahead – charge now at current price as fallback
+
+            # No cheap window ahead – charge only if price is within max charge price.
+            # Above that, fall through to self-consume rather than force an expensive charge.
+            max_charge_price = state["charge_from_grid_max_price_c"] / 100.0
+            if import_price <= max_charge_price:
                 return (Mode.CHEAP_CHARGE,
                         f"Low solar day ({solar_reason}), battery {battery_soc:.0f}% "
                         f"< min, no cheaper window ahead – charging now at "
-                        f"{import_price*100:.0f}c/kWh")
+                        f"{import_price*100:.0f}c/kWh (≤ max {max_charge_price*100:.0f}c)")
 
         # ── Priority 3: Battery full + export price ≥ min → max export ────
         if battery_soc >= state["battery_full_pct"] and export_price >= min_export_price:
